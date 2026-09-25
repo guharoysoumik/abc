@@ -327,7 +327,6 @@ Vec_Int_t * Gia_ManStartMappingFanoutMap( Gia_Man_t * p, Vec_Int_t * vFanoutNums
 void Gia_ObjCheckDupMappingFanins( Gia_Man_t * p, int iObj )
 {
     int * pFanins = Gia_ObjLutFanins( p, iObj );
-    (void)pFanins;
     int i, k, nFanins = Gia_ObjLutSize( p, iObj );
     for ( i = 0; i < nFanins; i++ )
     for ( k = i + 1; k < nFanins; k++ )
@@ -431,3 +430,4 @@ void Gia_ManStaticFanoutTest( Gia_Man_t * p )
 
 
 ABC_NAMESPACE_IMPL_END
+

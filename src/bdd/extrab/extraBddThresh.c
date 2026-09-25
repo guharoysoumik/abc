@@ -615,7 +615,7 @@ int Extra_ThreshHeuristic(word * t, int nVars, int * pW) {
     pIsop = Abc_ConvertBddToSop( NULL, dd, ddNode, ddNode, nVars, 1,
             vCube, 1);
 
-    Abc_TtNot(t, Abc_Truth6WordNum(nVars));
+    Abc_TtNot(t, Abc_TruthWordNum(nVars));
     ddNodeFneg = Kit_TruthToBdd(dd, (unsigned *) t, nVars, 0);
     Cudd_Ref(ddNodeFneg);
 
@@ -690,3 +690,4 @@ void Extra_ThreshHeuristicTest() {
 ////////////////////////////////////////////////////////////////////////
 
 ABC_NAMESPACE_IMPL_END
+

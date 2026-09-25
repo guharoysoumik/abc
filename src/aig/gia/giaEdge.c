@@ -919,7 +919,6 @@ int Edg_ObjImprove( Gia_Man_t * p, int iObj, int nEdgeLimit, int DelayMax, int f
 int Edg_ManAssignEdgeNew( Gia_Man_t * p, int nEdges, int fVerbose )
 {
     int DelayNoEdge = 1;
-    (void)DelayNoEdge;
     int fLevelVerbose = 0;
     Vec_Int_t * vLevel;
     Vec_Wec_t * vEdges = Vec_WecStart(0);
@@ -998,3 +997,4 @@ int Edg_ManAssignEdgeNew( Gia_Man_t * p, int nEdges, int fVerbose )
 
 
 ABC_NAMESPACE_IMPL_END
+

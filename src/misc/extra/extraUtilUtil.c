@@ -274,9 +274,6 @@ char * Extra_UtilFileSearch(char *file, char *path, char *mode)
     int quit;
     char *buffer, *filename, *save_path, *cp;
 
-    if (file == NULL || mode == NULL)
-        return NULL;
-
     if (path == 0 || strcmp(path, "") == 0) {
     path = ".";        /* just look in the current directory */
     }
@@ -295,12 +292,8 @@ char * Extra_UtilFileSearch(char *file, char *path, char *mode)
     if (strcmp(path, ".") == 0) {
         buffer = Extra_UtilStrsav(file);
     } else {
-        size_t nPath = strlen(path), nFile = strlen(file);
-        buffer = ABC_ALLOC(char, nPath + nFile + 2);
-        if (buffer == NULL) { ABC_FREE(save_path); return NULL; }
-        memcpy(buffer, path, nPath);
-        buffer[nPath] = '/';
-        memcpy(buffer + nPath + 1, file, nFile + 1);
+        buffer = ABC_ALLOC(char, strlen(path) + strlen(file) + 4);
+        (void) sprintf(buffer, "%s/%s", path, file);
     }
     filename = Extra_UtilTildeExpand(buffer);
     ABC_FREE(buffer);

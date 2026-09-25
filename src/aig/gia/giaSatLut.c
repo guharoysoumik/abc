@@ -744,7 +744,6 @@ int Sbl_ManComputeCuts( Sbl_Man_t * p )
     abctime clk = Abc_Clock();
     Gia_Obj_t * pObj; Vec_Int_t * vFanins;
     int i, k, Index, Fanin, nObjs = Vec_IntSize(p->vLeaves) + Vec_IntSize(p->vAnds);
-    (void)nObjs;
     assert( Vec_IntSize(p->vLeaves) <= 128 && Vec_IntSize(p->vAnds) <= p->nVars );
     // assign leaf cuts
     Vec_IntClear( p->vCutsStart );
@@ -792,7 +791,6 @@ int Sbl_ManComputeCuts( Sbl_Man_t * p )
     Gia_ManForEachObjVec( p->vRoots, p->pGia, pObj, i )
     {
         int Obj = Gia_ObjId(p->pGia, pObj);
-        (void)Obj;
         if ( Gia_ObjIsCi(pObj) )
             continue;
         assert( Gia_ObjIsLut2(p->pGia, Obj) );
@@ -2091,3 +2089,4 @@ Gia_Man_t * Gia_ManKSatMapping( word Truth, int nIns, int nNodes, int nBound, in
 
 
 ABC_NAMESPACE_IMPL_END
+

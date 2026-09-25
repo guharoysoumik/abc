@@ -1,0 +1,31 @@
+read ./6d004.v;
+strash;
+print_stats;
+write_aiger ./6d004.aig;
+read  6d004.aig;
+write_dot  6d004.dot;
+print_stats;
+echo ">>>>>>>>>>>>>>>>>>>>>BMC3 with out any constraints<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+bmc3 -a -g -v -T 100;
+echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(())<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+read  6d004.aig;
+constr -N 1;
+print_stats;
+fold;print_stats;
+write 6d004_with_constr.aig;
+write_dot  6d004_with_constr.dot;
+echo ">>>>>>>>>>>>>BMC3 with non inverting constraint on PI x (Constr x ==0 )<<<<<<<<<"
+bmc3 -a -g -v -T 100;
+echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(())<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+read  6d004.aig;
+constr -N 1;constr -i;
+fold;print_stats;
+write_dot  6d004_with_inv_constr.dot;
+write 6d004_with_inv_constr.aig;
+echo ">>>>>>>>>>>>>>BMC3 with inverting constraints on PI x (Constr x ==1)<<<<<<<<<<<<"
+bmc3 -a -g -v -T 100;
+print_stats;
+echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(())<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+read ./6d004.aig;print_stats;
+read ./6d004_with_constr.aig;print_stats;
+read ./6d004_with_inv_constr.aig;print_stats;

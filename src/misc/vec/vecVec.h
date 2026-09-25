@@ -145,8 +145,6 @@ struct Vec_Vec_t_
 static inline Vec_Vec_t * Vec_VecAlloc( int nCap )
 {
     Vec_Vec_t * p;
-    assert( nCap >= 0 );
-    if ( nCap < 0 ) abort();
     p = ABC_ALLOC( Vec_Vec_t, 1 );
     if ( nCap > 0 && nCap < 8 )
         nCap = 8;
@@ -645,3 +643,4 @@ ABC_NAMESPACE_HEADER_END
 ////////////////////////////////////////////////////////////////////////
 ///                       END OF FILE                                ///
 ////////////////////////////////////////////////////////////////////////
+

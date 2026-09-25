@@ -384,7 +384,7 @@ static inline int Vec_PtrCountZero( Vec_Ptr_t * p )
 
 ***********************************************************************/
 static inline void * Vec_PtrEntry( Vec_Ptr_t * p, int i )
-{
+{//Returns the ith entry of the vector array
     assert( i >= 0 && i < p->nSize );
     return p->pArray[i];
 }

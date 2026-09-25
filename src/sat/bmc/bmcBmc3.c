@@ -45,7 +45,7 @@ static inline void Bmc3_CadicalSetRuntimeLimit( cadical_solver * pSat4, abctime 
 typedef struct Gia_ManBmc_t_ Gia_ManBmc_t;
 struct Gia_ManBmc_t_
 {
-    // input/output data
+    // input/output data //Graph_Intermediate_And (aka GIA ??)
     Saig_ParBmc_t *   pPars;       // parameters
     Aig_Man_t *       pAig;        // user AIG
     Vec_Ptr_t *       vCexes;      // counter-examples
@@ -56,7 +56,7 @@ struct Gia_ManBmc_t_
     Vec_Int_t *       vId2Num;     // number of each node 
     Vec_Ptr_t *       vTerInfo;    // ternary information
     Vec_Ptr_t *       vId2Var;     // SAT vars for each object
-    Vec_Wec_t *       vVisited;    // visited nodes
+    Vec_Wec_t *       vVisited;    // visited nodes //Why it is needed ?
     abctime *         pTime4Outs;  // timeout per output
     // hash table
     Vec_Int_t *       vData;       // storage for cuts
@@ -733,25 +733,188 @@ Gia_ManBmc_t * Saig_Bmc3ManStart( Aig_Man_t * pAig, int nTimeOutOne, int nConfLi
     Gia_ManBmc_t * p;
     Aig_Obj_t * pObj;
     int i;
+    unsigned int entry;
+    printf("\n[src/sat/bmc/bmcBmc3.c] Saig_Bmc3ManStart():\n");
 //    assert( Aig_ManRegNum(pAig) > 0 );
     p = ABC_CALLOC( Gia_ManBmc_t, 1 );
-    p->pAig = pAig;
+    p->pAig = pAig; // Relation between Gia_ManBmc and Aig_ManBmc: NOTE: Gia_ManBmc contains Aig_ManBmc
     // create mapping
-    p->vMapping = Cnf_DeriveMappingArray( pAig );
-    p->vMapRefs = Saig_ManBmcComputeMappingRefs( pAig, p->vMapping );
+    // mapping ! To Eat or to put it on head ?
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Best cut finding START ...\n");
+    p->vMapping = Cnf_DeriveMappingArray( pAig ); // What / why / how / when ? // It finds the best cuts of each AND nodes 
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Best cut finding END ...\n");
+    p->vMapRefs = Saig_ManBmcComputeMappingRefs( pAig, p->vMapping ); // What / why / how / when ?
+    /*
+    What is the differnces betweenp->vMaprefs and Aig_ObjRefs(pObj)?
+    Answer: Aig_ObjRefs(pObj) returns the number of times an object is referenced in the AIG, 
+    while p->vMapRefs is a vector that counts how many times each object is referenced in the mapping derived from the AIG. 
+    The mapping may include additional references based on how the AIG is transformed or represented in the SAT solver context.
+    [Not clear to me ]
+    */
+
+    //Print the context of vMapping and vMapRefs vectors
+    
+    printf("[SGR]----------------------------------------\n");
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Print all aig objects [VERY IMPORTATNT @Saig_Bmc3ManStart(.. Line: 755 )]\n");
+    Aig_ManForEachObj( pAig, pObj, i )
+    {
+        printf("Object ID: %d, Type: %s, Ref Count: %d, Mapping: %d ---> ", Aig_ObjId(pObj),
+        Aig_ObjIsCi(pObj) ? "CI" : (Aig_ObjIsCo(pObj) ? "CO" : (Aig_ObjIsNode(pObj) ? "Node" : "Const")), 
+        Aig_ObjRefs(pObj), Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)));
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Cut Status : %d\n",Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)));
+    }
+    printf("[SGR]----------------------------------------\n");
+    printf("[SGR] Content of the vMapping: Size: %d\n",p->vMapping->nSize);
+    Vec_IntForEachEntry(p->vMapping,entry,i)
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Entry at %d: %u\n", i, entry);
+    
+    printf("[SGR] Relate the objects with their mapping: \n");
+    printf("[SGR]----------------------------------------\n");
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]\n Print all the internal nodes i.e AND Nodes\n");
+    int countAndNodes=0;
+    Aig_ManForEachNode(pAig,pObj,i)
+    {
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]%d th AND Node: AIG Object ID: %d, Ref Count: %d\n",i,Aig_ObjId(pObj),Aig_ObjRefs(pObj));
+        countAndNodes++;
+    }
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Total AND Nodes: %d\n", countAndNodes);
+    //Cut Information printing Begin
+    printf("\n=======================================================================\n");
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]DETAILS OF EACH CUT \n");
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Detection of Absorbed/Non Absorbed nodes after cut:\n ");
+    int countAbsorbedNodes=0;
+    Aig_ManForEachNode( pAig, pObj, i )
+    {
+        /*
+        SGR NOTE: Aig_ManForEachObj vs Aig_ManForEachNode: Aig_ManForEachObj iterates over all objects in the AIG, including CIs, 
+        COs, and nodes, while Aig_ManForEachNode iterates only over the internal nodes of the AIG. 
+        In this context, we are interested in checking the mapping for each internal node to determine if it is absorbed or not.
+        */
+        printf ("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] i=%d  Checking the Node : pObj=%d --> ",i,Aig_ObjId(pObj));
+        
+        if ( Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) == 0 )
+        {
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]Aig Node %d -> Absorbed  -> NOT SAT VAR for it \n",i);
+            countAbsorbedNodes++;
+        }
+            
+        else{
+            
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]Aig Node %d->Non Absorbed-> Allocate a new SAT VAR for it\n",i);
+            //Get the uTruth value of the node from the vMapping vector
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]-->Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) = %d\n",Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)));
+            int *pData;
+            pData=Vec_IntEntryP(p->vMapping, Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)));
+            int uTruth = pData[0] & 0xffff; //SGR: Extract the uTruth value from the mapping data
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]-->uTruth value of the node %d is: 0x%04X\n",i,uTruth);
+            //How to print the cut leaves of the node from the vMapping vector ?
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]-->Cut leaves of the node %d are: \n",i);
+            for (int iFan=0;iFan<4;iFan++)
+            {
+                if (pData[iFan+1]<0) break;
+                else
+                {
+                    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]---->AIG Object ID: %d\n",pData[iFan+1]);
+                }
+            }
+        }//End of Aig_ManForEachNode loop
+        
+    }//End of Each Node iteration
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]Total AND(internal)Nodes: %d,Total Absorbed Nodes: %d [%f %],Best Cut Nodes: %d [ %f %]\n",Aig_ManNodeNum(pAig), countAbsorbedNodes,(float)countAbsorbedNodes/Aig_ManNodeNum(pAig),Aig_ManNodeNum(pAig)-countAbsorbedNodes,(float)(Aig_ManNodeNum(pAig)-countAbsorbedNodes)/Aig_ManNodeNum(pAig));
+    
+    printf("=======================================================================\n");
+    //Cut Information printing END
+    printf("\n[SGR]----------------------------------------\n");
+    printf("[SGR] Content of the vMapRefs: Size: %d \n",p->vMapRefs->nSize);
+    Vec_IntForEachEntry(p->vMapRefs,entry,i)
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Entry at %d: %d\n", i, entry);
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] p->vMapsRefs vs Aig_ObjRefs(pObj): ??? \n");
+    //End of vMapping and vMarRefs vector printing
+    printf("[SGR]----------------------------------------\n");
     // create sections
 //    p->vSects = Saig_ManBmcSections( pAig );
     // map object IDs into their numbers and section numbers
-    p->nObjNums = 0;
-    p->vId2Num  = Vec_IntStartFull( Aig_ManObjNumMax(pAig) );
+    p->nObjNums = 0; 
+    /* p->nObjNums: This counter holds the total aig objects added to the vid2var vector. 
+    It is used to assign the next number to the next aig object added to the vector.*/
+
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_Bmc3ManStart()] Total Objects in AIG: %d\n", p->nObjNums);
+    p->vId2Num  = Vec_IntStartFull( Aig_ManObjNumMax(pAig) );//Create an Vector of size Aig_ManObjNumMax(pAig) and fill it with -1
+    //Add each AIG objects to the vId2Num vector with their corresponding numbers
+    //1st Add: Const1, 2nd Add: CIs, 3rd Add: Nodes, 4th Add: COs
+    printf("Adding order into vId2Num vector : Const1 -> CI -> Nodes -> COs\n");
+    //Step 1: Add Const1
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] AIG Object ID of const 1: %d added to vID2Num at location %d\n",Aig_ObjId(Aig_ManConst1(pAig)),p->nObjNums);
     Vec_IntWriteEntry( p->vId2Num,  Aig_ObjId(Aig_ManConst1(pAig)), p->nObjNums++ );
+    
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Adding CI to vId2Num vector\n");
+    //Step 2: Add CIs to vId2Num Vector(Combinational Inputs = CIs = PIs + Latches_Outputs)
+    //Note: All CI can be added directly to vId2Num vector as they are all relevant for SAT solving. No need to check the vMapping vector for CIs.
     Aig_ManForEachCi( pAig, pObj, i )
+    {
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] AIG Object ID of CI %d: %d added to vID2Num at location %d\n",i,Aig_ObjId(pObj),p->nObjNums);
+        //p->vId2Num[Aig_ObjId(pObj)] = p->nObjNums++;
         Vec_IntWriteEntry( p->vId2Num,  Aig_ObjId(pObj), p->nObjNums++ );
-    Aig_ManForEachNode( pAig, pObj, i )
+    }
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Adding CI(#CI =%d ) to vId2Num vector\n",i);
+    
+    //Step 3: Add Nodes to vId2Num Vector(Internal Nodes = AND Nodes)
+    /*
+    Note: All And nodes that are in the best cut of some other node are not relevant for SAT solving. 
+    So, we need to check the vMapping vector for each node before adding it to vId2Num vector.
+    */
+   printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Adding RELEVANT AND (Internal Nodes) to vId2Num vector\n");
+    Aig_ManForEachNode( pAig, pObj, i ){
         if ( Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) > 0 )
+        { /*
+            What is the p-.vMapping vector here ?
+            Ans: The p->vMapping vector is a data structure that holds the mapping information
+             for each node in the AIG (And-Inverter Graph). It is derived from the AIG structure
+            */
+            //Why this condition is used here ?
+            /*Ans: This condition checks if the current node has a valid mapping in the vMapping vector. 
+            If the mapping is greater than 0, it indicates that the node is relevant for the SAT solver and 
+            should be included in the vId2Num vector. Nodes without a valid mapping (i.e., those with a mapping of 0) are 
+            likely not needed for the SAT solving process and are therefore skipped.*/
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] AIG Object ID of Node %d: %d added to vID2Num at location %d\n",i,Aig_ObjId(pObj),p->nObjNums);
             Vec_IntWriteEntry( p->vId2Num,  Aig_ObjId(pObj), p->nObjNums++ );
+        }
+        else
+        {
+            //This node is not relevant for SAT solving. It is not a cut node, as indicated by the vMapping array.
+            printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] AIG Object ID of Node %d: %d is skipped as it has no mapping [%d]..BUT WHY? Reason begin vMapping array.\n This node is not relevant for SAT solving.This node is not a cut node => Indicated by the vMapping array\n",i,Aig_ObjId(pObj),Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)));
+        }
+    }//End of the Internal Node (AND) itertaion loop
+            
+
+    //Step 4: Add COs to the vId2Num Vector(Combinational Outputs = COs = POs + Latches_Inputs)
+    /*
+    Note: All COs can be added directly to vId2Num vector as they are all relevant for SAT solving. 
+    No need to check the vMapping vector for COs as they are irrelevant for CUT result.
+    Cut finding related with internal nodes (AND nodes) only. COs are not part of the cut finding process.
+    */
+   printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Adding All COs to vId2Num vector\n");
     Aig_ManForEachCo( pAig, pObj, i )
+    {
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] AIG Object ID of CO %d: %d added to vID2Num at location %d\n",i,Aig_ObjId(pObj),p->nObjNums);
         Vec_IntWriteEntry( p->vId2Num,  Aig_ObjId(pObj), p->nObjNums++ );
+    }
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] CI,AND(selected),CO  added to vId2Num vector\n");
+    printf("[src/sat/bmc/bmcBmc3.c/Saig_Bmc3ManStart()] Total Objects added to vID2Num: %d\n", p->nObjNums);
+    printf("[src/sat/bmc/bmcBmc3.c/Saig_Bmc3ManStart()]#nTruePis: %d #ntruePos: %d #Reg: %d\n", Saig_ManPiNum(pAig), Saig_ManPoNum(pAig), Saig_ManRegNum(pAig));
+    //vId2Num vector is used to map AIG object IDs to their corresponding numbers in the SAT solver. 
+    //The vector is initialized with -1 for all entries, and then each AIG object (Const1, CIs, Nodes, COs) is assigned 
+    //a unique number in the order they are added.
+
+    //----How to print the content of vId2Num vector ?-----
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Size of vId2Num vector: %d\n", Vec_IntSize(p->vId2Num));
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)]----------------------------------------\n");
+    printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Content of (vId2Num vector :p->vMapping[cut info/ SAT variable ]) \n");
+    Vec_IntForEachEntry(p->vId2Num,entry,i)
+        printf("[/src/sat/bmc/bmcBmc3.c/Saig_BmcManStart(...)] Entry @index %d ( %d : %d)\n", i, entry,p->vMapping->pArray[i]); //What is that pArray ?
+    //--End of printing the content of vId2Num vector------
+
+    
     p->vId2Var  = Vec_PtrAlloc( 100 );
     p->vTerInfo = Vec_PtrAlloc( 100 );
     p->vVisited = Vec_WecAlloc( 100 );
@@ -769,9 +932,13 @@ Gia_ManBmc_t * Saig_Bmc3ManStart( Aig_Man_t * pAig, int nTimeOutOne, int nConfLi
     else if ( fUseGlucose )
     {
         //opts.conf_limit = nConfLimit;
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_Bmc3ManStart()]BEGIN \n");
         p->pSat3 = bmcg_sat_solver_start();  
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_Bmc3ManStart()]END \n");
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_Bmc3ManStart()]BEGIN---> bmcg_sat_solver_addvar(...)\n");
         for ( i = 0; i < 1000; i++ )
-            bmcg_sat_solver_addvar( p->pSat3 );
+            bmcg_sat_solver_addvar( p->pSat3 ); //<--- Why 999 var added ? 
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_Bmc3ManStart()]END---> bmcg_sat_solver_addvar(...)\n");
     }
     else if ( fUseCadical )
     {
@@ -861,16 +1028,16 @@ void Saig_Bmc3ManStop( Gia_ManBmc_t * p )
 
   Synopsis    []
 
-  Description []
+  Description [SGR: This function returns the pointer/address/location where the cut information about the AND node is present (if not absorbed)]
                
-  SideEffects []
+  SideEffects [SGR: Returns NULL or Address]
 
   SeeAlso     []
 
 ***********************************************************************/
 static inline int * Saig_ManBmcMapping( Gia_ManBmc_t * p, Aig_Obj_t * pObj )
 {
-    if ( Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) == 0 )
+    if ( Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) == 0 ) //It means the object is absorbed i.e Absorbed AND Node(internal node) Checking
         return NULL;
     return Vec_IntEntryP( p->vMapping, Vec_IntEntry(p->vMapping, Aig_ObjId(pObj)) );
 }
@@ -1061,7 +1228,7 @@ static inline void Saig_ManBmcAddClauses( Gia_ManBmc_t * p, int uTruth, int Lits
 
 /**Function*************************************************************
 
-  Synopsis    [Derives CNF for one node.]
+  Synopsis    [SGR: Derives CNF for one node / Internal Nodes /AND Node / Non Absorbed AND Node. This module checks for CI , CO , AND Nodes]
 
   Description []
                
@@ -1072,35 +1239,92 @@ static inline void Saig_ManBmcAddClauses( Gia_ManBmc_t * p, int uTruth, int Lits
 ***********************************************************************/
 int Saig_ManBmcCreateCnf_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
 {
+    /* SGR: Ask this queastions to self 
+    Question: For which AIg object we need to create CNF ?
+    Question: How to relate CNF and SAT variables or Literals ?
+    Question: Do we need to create CNF for only true POs ?
+    Question: What is the effect of AND nodes and the SAT varibles ?
+    Question: To create a CNF for an true PO, what is needed ?
+
+    Think: Imagine how to process CI and CO and AND Nodes.
+    */
+
     extern unsigned Dar_CutSortVars( unsigned uTruth, int * pVars );
     int * pMapping, i, iLit, Lits[5], uTruth;
-    iLit = Saig_ManBmcLiteral( p, pObj, iFrame );
-    if ( iLit != ~0 )
+    int message_print=1;
+
+    /* Checking if the Lit already assigned for the AND object pObj based on the Ter Sim outcome. But why need to check this ?*/
+    iLit = Saig_ManBmcLiteral( p, pObj, iFrame ); 
+
+    message_print?printf("\n[[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf_rec()]] iLit=%d\n",iLit):printf("");
+
+    if ( iLit != ~0 ) //~0 means this AND node has NO SAT Variables 
         return iLit; 
+
+    //SGR: How to Deal with CI (PI and Latch_out) ?
     assert( iFrame >= 0 );
     if ( Aig_ObjIsCi(pObj) )
     {
+        message_print?printf("\n[[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf_rec()]]Object is CI\n"):printf("");
         if ( Saig_ObjIsPi(p->pAig, pObj) )
-            iLit = toLit( p->nSatVars++ );
+        {
+            //SGR: This is PI object => Craete a new SAT var 
+            //SGR: Note that this SAT variable is Free Variable
+            iLit = toLit( p->nSatVars++ ); //Converts SAT var to Literal
+        }
         else
+        {
+            /*
+            SGR: This object is CI but not PI => This object is Latch_Output
+            As this object Latch Output object , need to do what ?
+            */
             iLit = Saig_ManBmcCreateCnf_rec( p, Saig_ObjLoToLi(p->pAig, pObj), iFrame-1 );
+        }
+            
         return Saig_ManBmcSetLiteral( p, pObj, iFrame, iLit );
     }
+
+    /*SGR: 
+        How to Deal with CO (PO + Latch_Input) ?
+        Note: Each PO is a property for which we need to create CNF.
+        Think how to the CNF will be created ? How / What aig objects will be used to create the CNF for each PO ?
+    */
     if ( Aig_ObjIsCo(pObj) )
     {
+        /*
+        SGR: The Object is CO i.e (PO + Latch_In) but the object is not any internal nodes that is AND nodes
+        */
+        message_print?printf("\n[[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf_rec()]]Object is CO\n"):printf("");
         iLit = Saig_ManBmcCreateCnf_rec( p, Aig_ObjFanin0(pObj), iFrame );
         if ( Aig_ObjFaninC0(pObj) )
+        {
+            /*
+            SGR: The object is CO i.e (PO + latch_In) whose fanin edge is complemented
+            */
             iLit = lit_neg(iLit);
+        }
+            
         return Saig_ManBmcSetLiteral( p, pObj, iFrame, iLit );
     }
-    assert( Aig_ObjIsNode(pObj) );
-    pMapping = Saig_ManBmcMapping( p, pObj );
+
+    //SGR: How to deal with AND Object 
+    /*
+    SGR: What about the Internal nodes/AND Nodes ?
+    Two types of AND Nodes-Absorbed and Non Absorbed AND nodes. Absorbed AND Nodes => Donot Create SAT Var for it. 
+    Non Absorbed Nodes => Create SAT var for it
+    Hence we need to detect whether a given AND object is Absorbed or not. hence we need that vMapping Array.
+    */
+    assert( Aig_ObjIsNode(pObj) ); // SGR: we need to create literals for AND nodes only. If AND node is absorbed, then no lit is allocated for it
+    pMapping = Saig_ManBmcMapping( p, pObj ); //SGR: It finds the address in the Data zone in the vMapping for a AND node. AND Node absorbed => Returns NULL 
     for ( i = 0; i < 4; i++ )
-        if ( pMapping[i+1] == -1 )
-            Lits[i] = -1;
+    {
+        if ( pMapping[i+1] == -1 ) // SGR: Leaf node at i, is not included in the output of the non absorbed AND node
+            Lits[i] = -1; //Hence, donot create a literal for it
         else
-            Lits[i] = Saig_ManBmcCreateCnf_rec( p, Aig_ManObj(p->pAig, pMapping[i+1]), iFrame );
+            Lits[i] = Saig_ManBmcCreateCnf_rec( p, Aig_ManObj(p->pAig, pMapping[i+1]), iFrame ); //This i-th leaf node participate in the AND o/p => Create Lit for it
+    }
     uTruth = 0xffff & (unsigned)pMapping[0];
+    
     // propagate constants
     uTruth = Saig_ManBmcReduceTruth( uTruth, Lits );
     if ( uTruth == 0 || uTruth == 0xffff )
@@ -1108,6 +1332,7 @@ int Saig_ManBmcCreateCnf_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
         iLit = (uTruth == 0xffff);
         return Saig_ManBmcSetLiteral( p, pObj, iFrame, iLit );
     }
+
     // canonicize inputs
     uTruth = Dar_CutSortVars( uTruth, Lits );
     assert( uTruth != 0 && uTruth != 0xffff );
@@ -1129,7 +1354,9 @@ int Saig_ManBmcCreateCnf_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
         if ( iRes == iEntry )
         {
             iLit = toLit( p->nSatVars++ );
+            message_print?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf_rec()]Saig_ManBmcAddClauses() BEGINS \n"):printf("");
             Saig_ManBmcAddClauses( p, Lits[4], Lits, iLit );
+            message_print?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf_rec()]Saig_ManBmcAddClauses() ENDS \n"):printf("");
             assert( iEntry == Vec_IntSize(p->vId2Lit) );
             Vec_IntPush( p->vId2Lit, iLit );
             p->nHashMiss++;
@@ -1199,10 +1426,16 @@ void Saig_ManBmcCreateCnf_iter( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame, 
 ***********************************************************************/
 int Saig_ManBmcRunTerSim_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
 {
+    /*
+    SAIG_TER_NON 0     SAIG_TER_ZER 1    SAIG_TER_ONE 2     SAIG_TER_UND 3
+    */
+    int sgr_print_message=0;
     unsigned * pInfo = (unsigned *)Vec_PtrEntry( p->vTerInfo, iFrame );
     int Val0, Val1, Value = Saig_ManBmcSimInfoGet( pInfo, pObj );
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] START Obj ID: %d Value: %d\n", Aig_ObjId(pObj) ,Value):printf("");
     if ( Value != SAIG_TER_NON )
     {
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()]Value != SAIG_TER_NON=> val = FALSE/TRUE/X Obj ID: %d Value: %d(RETURN THIS) (FALSE/TRUE/X) \n", Aig_ObjId(pObj) ,Value):printf("");
 /*
         // check the value of this literal in the SAT solver
         if ( Value == SAIG_TER_UND && Saig_ManBmcMapping(p, pObj) )
@@ -1234,6 +1467,8 @@ int Saig_ManBmcRunTerSim_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
     }
     if ( Aig_ObjIsCo(pObj) )
     {
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Obj ID: %d is CO(PO or LATCH In => Only one Fanin ) Object Fanin0 ID: %d \n", Aig_ObjId(pObj), Aig_ObjId(Aig_ObjFanin0(pObj))):printf("");
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Calling Saig_ManBmcRunTerSim_rec(...) for the Object id: %d\n",Aig_ObjId(Aig_ObjFanin0(pObj))):printf("");
         Value = Saig_ManBmcRunTerSim_rec( p, Aig_ObjFanin0(pObj), iFrame );
         if ( Aig_ObjFaninC0(pObj) )
             Value = Saig_ManBmcSimInfoNot( Value );
@@ -1241,29 +1476,42 @@ int Saig_ManBmcRunTerSim_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
     else if ( Saig_ObjIsLo(p->pAig, pObj) )
     {
         assert( iFrame > 0 );
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()]Obj ID: %d is Latch_output(CI={PI or Latch Out}=> Only one Fanin )  Obj_LoToLi: %d\n", Aig_ObjId(pObj),Saig_ObjLoToLi(p->pAig, pObj)):printf("");
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Calling Saig_ManBmcRunTerSim_rec(...) for the Object id: %d\n",Saig_ObjLoToLi(p->pAig, pObj)):printf("");
         Value = Saig_ManBmcRunTerSim_rec( p, Saig_ObjLoToLi(p->pAig, pObj), iFrame - 1 );
     }
     else if ( Aig_ObjIsNode(pObj) )
     {
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Obj ID: %d is AND Node Fanin0 ID: %d Fanin1 ID: %d\n", Aig_ObjId(pObj), Aig_ObjId(Aig_ObjFanin0(pObj)), Aig_ObjId(Aig_ObjFanin1(pObj))):printf("");
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Value= Left Node and Right Node = %d\n",Value):printf("");
         Val0 = Saig_ManBmcRunTerSim_rec( p, Aig_ObjFanin0(pObj), iFrame  );
         Val1 = Saig_ManBmcRunTerSim_rec( p, Aig_ObjFanin1(pObj), iFrame  );
-        if ( Aig_ObjFaninC0(pObj) )
+        
+        if ( Aig_ObjFaninC0(pObj) ) //Is the Left Edge of this node has complement
             Val0 = Saig_ManBmcSimInfoNot( Val0 );
-        if ( Aig_ObjFaninC1(pObj) )
+        if ( Aig_ObjFaninC1(pObj) ) //Is the Right Edge of this node has complement
             Val1 = Saig_ManBmcSimInfoNot( Val1 );
         Value = Saig_ManBmcSimInfoAnd( Val0, Val1 );
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()] Obj ID: %d is AND Node Fanin0 ID: %d Fanin1 ID: %d Value: %d\n", Aig_ObjId(pObj), Aig_ObjId(Aig_ObjFanin0(pObj)), Aig_ObjId(Aig_ObjFanin1(pObj)),Value):printf("");
+        
     }
-    else assert( 0 );
+    else{
+            sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()]Else Section\n"):printf("");
+            assert( 0 );
+    } 
+        
     Saig_ManBmcSimInfoSet( pInfo, pObj, Value );
     // transfer to the unrolling
     if ( Saig_ManBmcMapping(p, pObj) && Value != SAIG_TER_UND )
         Saig_ManBmcSetLiteral( p, pObj, iFrame, (int)(Value == SAIG_TER_ONE) );
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcRunTerSim_rec()]EXIT Obj ID: %d Value: %d\n", Aig_ObjId(pObj) ,Value):printf("");
     return Value;
 }
 
+
 /**Function*************************************************************
 
-  Synopsis    [Derives CNF for one node.]
+  Synopsis    [[SGR]Derives CNF for one PO node.]
 
   Description []
                
@@ -1273,19 +1521,42 @@ int Saig_ManBmcRunTerSim_rec( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
 
 ***********************************************************************/
 int Saig_ManBmcCreateCnf( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
-{
+{ //[SGR]Note that pObj is PO here. Think why ? 
+    //Ternary Simulation Propagation on PO Nodes done here using the Saig_ManBmcRunTerSim_rec(...) function
+    int sgr_print_message=1;
     Vec_Int_t * vVisit, * vVisit2;
     Aig_Obj_t * pTemp;
     int Lit, f, i;
-    // perform ternary simulation
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()] BEGIN iFrame:%d ObjId:%d Type: %d(PO)\n",iFrame,pObj->Id,pObj->Type):printf("");
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]\Saig_ManBmcRunterSim_rec(...)Ternary Simulation BEGIN: for the object type: %d  ID: %d BEGIN \n",pObj->Type,pObj->Id):printf("");
+    // perform ternary simulation //Think/Imagine about the way how ter simu done
     int Value = Saig_ManBmcRunTerSim_rec( p, pObj, iFrame );
-    if ( Value != SAIG_TER_UND )
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]\Saig_ManBmcRunterSim_rec(...) END for the object type: %d(PO)  ID: %d END \n",pObj->Type,pObj->Id):printf("");
+    /*
+    SAIG_TER_NON 0(not yet determined)     SAIG_TER_ZER 1    SAIG_TER_ONE 2     SAIG_TER_UND 3
+    */
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]Saig_ManBmcRunTerSim_rec(..) Return Value: %d \n", Value):printf("'");
+    if (Value == SAIG_TER_UND)
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]ternary Simulation is UNDETermined \n"):printf("");
+    else
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]ternary Simulation is DETermined Ter Sum Value: %d (UNSET / FALSE / TRUE)\n",Value):printf("");
+    //printf("ternary Simulation is %s \n", Value == SAIG_TER_ONE ? "DETERMINED" : "UNDETERMINED");
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()] ternary Simulation Result is %s \n", Value == SAIG_TER_UND ? "UNDETERMINED" : "DETERMINED"):printf("");
+    
+    if ( Value != SAIG_TER_UND ){
+        sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()] Value is NOT UNDETermined(i.e DETermined) ..RETURNS either 0(NON) or 1 (ZERO/FALSE) or 2 (ONE/TRUE)==> DONOT create SAT var for it\n"):printf("");
         return (int)(Value == SAIG_TER_ONE);
+    }
+
+    //-------------value is SAIG_TER_UND, so we need to construct CNF for this PO node---------------
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]Value is UND i.e %d ..CONTINUE\n",Value):printf("");
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]Ternary simulation for this PO object is SAIG_TER_UND, so we need to construct CNF for this PO node and call SAT solver to SOLVE it\n"):printf("");
     // construct CNF if value is ternary
 //    Lit = Saig_ManBmcCreateCnf_rec( p, pObj, iFrame );
     Vec_WecClear( p->vVisited );
     vVisit = Vec_WecPushLevel( p->vVisited );
     Vec_IntPush( vVisit, Aig_ObjId(pObj) );
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]Loop for f =iFrame to 0  BEGINS \n"):printf("");
     for ( f = iFrame; f >= 0; f-- )
     {
         Aig_ManIncrementTravId( p->pAig );
@@ -1296,15 +1567,19 @@ int Saig_ManBmcCreateCnf( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
         if ( Vec_IntSize(vVisit2) == 0 )
             break;
     }
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]Loop for f =iFrame to 0  END \n"):printf("");
+
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]---->Saig_ManBmcCreateCnf_rec(...) BEGINS \n"):printf("");
     Vec_WecForEachLevelReverse( p->vVisited, vVisit, f )
         Aig_ManForEachObjVec( vVisit, p->pAig, pTemp, i )
             Saig_ManBmcCreateCnf_rec( p, pTemp, iFrame-f );
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()]---->Saig_ManBmcCreateCnf_rec(...) ENDS \n"):printf("");
     Lit = Saig_ManBmcLiteral( p, pObj, iFrame );
     // extend the SAT solver
     if ( p->pSat2 )
         satoko_setnvars( p->pSat2, p->nSatVars );
     else if ( p->pSat3 )
-    {
+    {//For the Glucose SAT Solver
         for ( i = bmcg_sat_solver_varnum(p->pSat3); i < p->nSatVars; i++ )
             bmcg_sat_solver_addvar( p->pSat3 );
     }
@@ -1315,10 +1590,47 @@ int Saig_ManBmcCreateCnf( Gia_ManBmc_t * p, Aig_Obj_t * pObj, int iFrame )
     }
     else
         sat_solver_setnvars( p->pSat, p->nSatVars );
+    sgr_print_message?printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcCreateCnf()] END iFrame:%d ObjId:%d Type: %d\n",iFrame,pObj->Id,pObj->Type):printf("");
     return Lit;
 }
 
+char * getObjType(int argObjID)
+{
+    switch (argObjID)
+    {
+        case 0:
+            return "None";
+            //break;
 
+        case 1:
+            return "CONST 1 Node";
+            //break;
+
+        case 2:
+            return "CI Node";
+            //break;
+        case 3:
+            return "CO Node";
+            //break;
+
+        case 4:
+            return "Buffer Node";
+            //break;
+        case 5:
+            return "AND Node";
+            //break;
+        case 6:
+            return "Exor Node";
+            //break;
+        case 7:
+            return "Place Holder Node";
+            //break;
+
+    default: 
+        return "ZZZZZ Node";
+        break;
+    }
+}
 
 /**Function*************************************************************
 
@@ -1454,7 +1766,7 @@ Abc_Cex_t * Saig_ManGenerateCex( Gia_ManBmc_t * p, int f, int i )
 
 /**Function*************************************************************
 
-  Synopsis    []
+  Synopsis    [THIS FUNCTION CALLS THE ACTUAL SAT SOLVER AFTER SETING THE  BUDGET FOR THE SOLVER]
 
   Description []
                
@@ -1465,16 +1777,27 @@ Abc_Cex_t * Saig_ManGenerateCex( Gia_ManBmc_t * p, int f, int i )
 ***********************************************************************/
 int Saig_ManCallSolver( Gia_ManBmc_t * p, int Lit )
 {
-    if ( Lit == 0 )
+    if ( Lit == 0 ){
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)] Lit is ZERO from create_CNF (...)\n");
         return l_False;
-    if ( Lit == 1 )
+    }
+        
+    if ( Lit == 1 ){
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)] Lit is TRUE from create_CNF (...)\n");
         return l_True;
+    }
+    printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)] Lit is (UNDET) from create_CNF (...)Val(Lit): %d => Need to call SAT solver\n",Lit);
     if ( p->pSat2 )
         return satoko_solve_assumptions_limit( p->pSat2, &Lit, 1, p->pPars->nConfLimit );
     else if ( p->pSat3 )
-    {
+    {   //Glucose SAT Solver calling from here 
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)]bmcg_sat_solver_set_conflict_budget(...) BEGIN \n");
         bmcg_sat_solver_set_conflict_budget( p->pSat3, p->pPars->nConfLimit );
-        return bmcg_sat_solver_solve( p->pSat3, &Lit, 1 );
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)]bmcg_sat_solver_set_conflict_budget(...) END \n");
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)]==========================================>bmcg_sat_solver_solve(...) BEGIN <==========================================\n");
+        int result= bmcg_sat_solver_solve( p->pSat3, &Lit, 1 );
+        printf("[src/sat/bmc/bmcBmc3.c->Saig_manCallSolver(...)]==========================================>bmcg_sat_solver_solve(...) END (Return value: %d)<============================\n",result);
+        return result;
     }
     else if ( p->pSat4 )
     {
@@ -1497,6 +1820,9 @@ int Saig_ManCallSolver( Gia_ManBmc_t * p, int Lit )
 ***********************************************************************/
 int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
 {
+    int sgr_print_message=0;
+    
+    int count_SAT_Calls=0;
     Gia_ManBmc_t * p;
     Aig_Obj_t * pObj;
     Abc_Cex_t * pCexNew, * pCexNew0;
@@ -1516,8 +1842,12 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
         pPars->nTimeOutOne = 0;
     nTimeToStopNG = pPars->nTimeOut ? pPars->nTimeOut * CLOCKS_PER_SEC + Abc_Clock(): 0;
     nTimeToStop   = Saig_ManBmcTimeToStop( pPars, nTimeToStopNG );
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_Bmc3ManStart() BEGIN \n");
     // create BMC manager
+    //Saig_BmcManStart(..) returns a pointer to Gia_ManBmc_t structure
+    //p = Saig_BmcManStart(..) initializes the Gia_ManBmc_t structure and returns a pointer to it
     p = Saig_Bmc3ManStart( pAig, pPars->nTimeOutOne, pPars->nConfLimit, pPars->fUseSatoko, pPars->fUseGlucose, pPars->fUseCadical );
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_Bmc3ManStart() END \n");
     p->pPars = pPars;
     if ( p->pSat )
     {
@@ -1547,6 +1877,7 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
         p->vCexes = Vec_PtrStart( Saig_ManPoNum(pAig) );
     if ( pPars->fVerbose )
     {
+        printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
         Abc_Print( 1, "Running \"bmc3\". PI/PO/Reg = %d/%d/%d. And =%7d. Lev =%6d. ObjNums =%6d.\n",// Sect =%3d.\n", 
             Saig_ManPiNum(pAig), Saig_ManPoNum(pAig), Saig_ManRegNum(pAig),
             Aig_ManNodeNum(pAig), Aig_ManLevelNum(pAig), p->nObjNums );//, Vec_VecSize(p->vSects) );
@@ -1560,17 +1891,28 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
         if ( p->pSat2 )
             satoko_set_runtime_limit( p->pSat2, nTimeToStop );
         else if ( p->pSat3 )
+        {   printf("[/src/sat/bmc/bmcbmc3.c]bmcg_sat_solver_set_runtime_limit() to %d BEGIN \n",nTimeToStop);
             bmcg_sat_solver_set_runtime_limit( p->pSat3, nTimeToStop );
+            printf("[/src/sat/bmc/bmcbmc3.c]bmcg_sat_solver_set_runtime_limit() END \n");
+        }
+            
         else if ( p-> pSat4 )
             Bmc3_CadicalSetRuntimeLimit( p->pSat4, nTimeToStop );
         else
+        {
             sat_solver_set_runtime_limit( p->pSat, nTimeToStop );
+        }
+            
     }
     // perform frames
     Aig_ManRandom( 1 );
     pPars->timeLastSolved = Abc_Clock();
+    printf("\n[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Total Objects in this AIG: %d\nMax Time Frames: %d",p->nObjNums,pPars->nFramesMax);
+    printf("\n\n\n...................Time Frame Unrolling Starts....................\n");
     for ( f = 0; f < pPars->nFramesMax; f++ )
     {
+        printf("\n===============================================================================================\n");
+        printf("[src/sat/bmc/bmcBmc3.ac->Saig_ManBmcScalable(...)] Time frame unrolling: %d\n",f);
         if ( pPars->pFuncProgress && pPars->pFuncProgress( pPars->pProgress, 0, (unsigned)f ) )
             goto finish;
         // stop BMC after exploring all reachable states
@@ -1595,7 +1937,7 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
         if ( (RetValue == -1 || pPars->fSolveAll) && pPars->nStart == 0 && !nJumpFrame )
             pPars->iFrame = f-1;
         // map nodes of this section
-        Vec_PtrPush( p->vId2Var, Vec_IntStartFull(p->nObjNums) );
+        Vec_PtrPush( p->vId2Var, Vec_IntStartFull(p->nObjNums) );printf("\n[SGR]Objects: %d\n",p->nObjNums);
         Vec_PtrPush( p->vTerInfo, (pInfo = ABC_CALLOC(unsigned, p->nWordNum)) );
 /*
         // cannot remove mapping of frame values for any timeframes
@@ -1607,19 +1949,44 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
             ABC_FREE( pMemory );
         } 
 */
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_ManBmcSetLiteral() BEGIN \n");
         // prepare some nodes
         Saig_ManBmcSetLiteral( p, Aig_ManConst1(pAig), f, 1 );
-        Saig_ManBmcSimInfoSet( pInfo, Aig_ManConst1(pAig), SAIG_TER_ONE );
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_ManBmcSetLiteral() END \n");
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Intial Value {0,1} Assignment for CONST1, Each PI BEGIN\n");
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]-->Saig_ManBmcSimInfoSet(for Const 1 to make True ) BEGIN \n");
+        Saig_ManBmcSimInfoSet( pInfo, Aig_ManConst1(pAig), SAIG_TER_ONE );//Set Const1 to TRUE
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_ManBmcSimInfoSet() END \n");
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]-->Saig_ManForEachPi( set UND to each PI ) Saig_ManBmcSimInfoSet () BEGIN \n");
         Saig_ManForEachPi( pAig, pObj, i )
-            Saig_ManBmcSimInfoSet( pInfo, pObj, SAIG_TER_UND );
+            Saig_ManBmcSimInfoSet( pInfo, pObj, SAIG_TER_UND ); //Set each PI to UND
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Saig_ManForEachPi(set UND to each PI)Saig_ManBmcSimInfoSet () END \n");
+        printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Intial Value {0,1} Assignment for CONST1, Each PI END\n");
         if ( f == 0 )
         {
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]First Frame to unroll.. EachLo set Literal BEGIN \n");
+             /* ── SGR ── */
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] After frame 0 pre-registration:\n");
+            sgr_print_message?SGR_PrintId2Var( p, pAig ):printf("\n");
+            //SGR_PrintId2Var( p, pAig );
+            /* ── end SGR ── */
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]-->Each Latch Output (Reg) Initialized with ZERO starts[ As HWMCC designs says so :)]\n");
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)/Saig_ManBmcSimInfoSet( set each LO to ZERO ) BEGIN \n");
             Saig_ManForEachLo( p->pAig, pObj, i )
             {
+                printf("[src/sat/bmc/bmcbmc3.c]First Frame to unroll.. %d EachLo set Literal Obj ID: %d \n",i,Aig_ObjId(pObj));
                 Saig_ManBmcSetLiteral( p, pObj, 0, 0 );
-                Saig_ManBmcSimInfoSet( pInfo, pObj, SAIG_TER_ZER );
+                Saig_ManBmcSimInfoSet( pInfo, pObj, SAIG_TER_ZER ); //Set each LO to ZERO
             }
-        }
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)/Saig_ManBmcSimInfoSet( set each LO to ZERO ) END \n");
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Each Latch Output (Reg) Initialized with ZERO ends\n");
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]First Frame to unroll.. EachLo set Literal END \n");
+        }//Special case : for the initial frame f=0
+        /* ── SGR MOMENT A: after Place 1 seeds only ── */
+        printf("\n[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] ── pInfo AFTER SEEDING (AFTER TERNARY VALUE ASSIGNMENT and BEFORE CREATE-CNF) ──\n");
+        sgr_print_message?SGR_PrintId2Var( p, pAig ):printf("\n");
+        //SGR_PrintPInfo( pAig, pInfo, f );
+        /* ── end SGR ── */
         if ( (pPars->nStart && f < pPars->nStart) || (nJumpFrame && f < nJumpFrame) )
             continue;
         // create CNF upfront
@@ -1648,15 +2015,25 @@ int Saig_ManBmcScalable( Aig_Man_t * pAig, Saig_ParBmc_t * pPars )
                 if ( p->pTime4Outs && p->pTime4Outs[i] == 0 )
                     continue;
                 // add constraints for this output
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]------->Saig_ManBmcCreateCnf() inside pPars->fSolveAll BEGIN \n");
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]Create the CNF For each PO (if needed)\n");
 clk2 = Abc_Clock();
-                Saig_ManBmcCreateCnf( p, pObj, f );
-clkOther += Abc_Clock() - clk2;
-            }
+                Saig_ManBmcCreateCnf( p, pObj, f ); //Why ret value not captured ?
+                clkOther += Abc_Clock() - clk2;
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]------->Saig_ManBmcCreateCnf() inside pPars->fSolveAll END \n");
+            }//End of eachPO loop
         }
+        /* ── SGR MOMENT B: after TerSim_rec propagated through all POs ── */
+        printf("\n[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] ── pInfo(ter sim info holder for a frame) AFTER CNF Ternary Value PROPAGATION for each PO──\n");
+        sgr_print_message?SGR_PrintId2Var( p, pAig ):printf("\n");
+        //SGR_PrintPInfo( pAig, pInfo, f ); //What is pInfo ? How it is related to Ternary simulation ? What is the meaning of this print ?
+        printf("\n");
+        /* ── end SGR ── */
         // solve SAT
         clk = Abc_Clock(); 
-        Saig_ManForEachPo( pAig, pObj, i )
+        Saig_ManForEachPo( pAig, pObj, i ) 
         {
+            //[SGR]We want to create CNF for each PO objects (not for all CO objects)
             if ( i >= Saig_ManPoNum(pAig) )
                 break;
             // check for timeout
@@ -1685,10 +2062,32 @@ clkOther += Abc_Clock() - clk2;
             // skip output whose time has run out
             if ( p->pTime4Outs && p->pTime4Outs[i] == 0 )
                 continue;
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_manBmcScalable(...)]---------------------->Saig_ManBmcCreateCnf() Another BEGIN \n");
             // add constraints for this output
 clk2 = Abc_Clock();
-            Lit = Saig_ManBmcCreateCnf( p, pObj, f );
+            Lit = Saig_ManBmcCreateCnf( p, pObj, f ); //What is the Lit ? How ternary simulation is related to it ?
+            printf("[/src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] Return from Saig_ManBmcCreateCnf(...)   is Lit= %d \n",Lit);
 clkOther += Abc_Clock() - clk2;
+            
+            if (Lit>=1)
+            {
+                //SAT Call needed 
+                count_SAT_Calls++;
+            }
+            else
+            {
+                //No need to call SAT solver
+
+            }
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_manBmcScalable(...)]---------------------->Saig_ManBmcCreateCnf() Another END \n");
+             /* ── SGR ── */
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] After Saig_ManBmcCreateCnf(...):\n");
+            sgr_print_message?SGR_PrintId2Var( p, pAig ):printf("\n");
+            //SGR_PrintId2Var( p, pAig );
+            /* ── end SGR ── */
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]---------------------->Each Ter values BEGIN  \n");
+            sgr_print_message?print_Tervalues( pAig, pInfo, f ):printf("\n");//Print Ternary values for each node in this frame
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]---------------------->Each Ter values END  \n");
             // solve this output
             fUnfinished = 0;
             if ( p->pSat ) sat_solver_compress( p->pSat );
@@ -1704,10 +2103,27 @@ clkOther += Abc_Clock() - clk2;
                     Bmc3_CadicalSetRuntimeLimit( p->pSat4, p->pTime4Outs[i] + Abc_Clock() );
                 else
                     sat_solver_set_runtime_limit( p->pSat, p->pTime4Outs[i] + Abc_Clock() );
-            }
+            }//End of eachPO loop
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->Calling Saig_ManCallSolver(...) BEGIN  \n");
 clk2 = Abc_Clock();
-            status = Saig_ManCallSolver( p, Lit );
+            status = Saig_ManCallSolver( p, Lit ); //Why ? what ? When ?
 clkSatRun = Abc_Clock() - clk2;
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->Calling Saig_ManCallSolver(...) END  \n");
+            printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->restult from Saig_ManCallSolver(...): %d\n", status);
+            
+            if (status == -1 )
+            {
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->Saig_ManCallSolver(...) returned -1, meaning ??\n");
+            }
+            else if (status == 1 )
+            {
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->Saig_ManCallSolver(...) returned 1, meaning ??\n");
+            }
+            else
+            {
+                printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]--------->Saig_ManCallSolver(...) returned != {-1,1}, meaning ??\n");
+            }
+
             if ( pLogFile )
                 fprintf( pLogFile, "Frame %5d  Output %5d  Time(ms) %8d %8d\n", f, i, 
                     Lit < 2 ? 0 : (int)(clkSatRun * 1000 / CLOCKS_PER_SEC),
@@ -1722,11 +2138,13 @@ clkSatRun = Abc_Clock() - clk2;
                 if ( p->pTime4Outs[i] == 0 && status != l_True )
                     pPars->nDropOuts++;
             }
-            if ( status == l_False )
-            {
+            if ( status == l_False ) 
+            { //It says that the output is UNSAT at this f th frame
 nTimeUnsat += clkSatRun;
                 if ( Lit != 0 )
-                {
+                { //It means Lit is not 0. It may be {1,2,3,...}.
+                    //Lit = 1 => 
+                    //Lit >=2 => 
                     // add final unit clause
                     Lit = lit_neg( Lit );
                     if ( p->pSat2 )
@@ -1774,7 +2192,7 @@ nTimeSat += clkSatRun;
                         Abc_Print( 1, "Learn =%7.0f. ", (double)(p->pSat ? p->pSat->stats.learnts : p->pSat4 ? cadical_solver_nlearned(p->pSat4) : p->pSat3 ? bmcg_sat_solver_learntnum(p->pSat3) : satoko_learntnum(p->pSat2)) );
                         Abc_Print( 1, "%4.0f MB",      4.25*(f+1)*p->nObjNums /(1<<20) );
                         Abc_Print( 1, "%4.0f MB",      1.0*(p->pSat ? sat_solver_memory(p->pSat) : 0)/(1<<20) );
-                        Abc_Print( 1, "%9.2f sec  ",   (float)(Abc_Clock() - clkTotal)/(float)(CLOCKS_PER_SEC) );
+                        Abc_Print( 1, "%9.2f [sec]  ",   (float)(Abc_Clock() - clkTotal)/(float)(CLOCKS_PER_SEC) );
 //                        Abc_Print( 1, "\n" );
 //                        ABC_PRMn( "Id2Var", (f+1)*p->nObjNums*4 );
 //                        ABC_PRMn( "SAT", 42 * p->pSat->size + 16 * (int)p->pSat->stats.clauses + 4 * (int)p->pSat->stats.clauses_literals );
@@ -1915,7 +2333,7 @@ nTimeUndec += clkSatRun;
             Abc_Print( 1, "%4.0f MB",     4.0*(f+1)*p->nObjNums /(1<<20) );
             Abc_Print( 1, "%4.0f MB",     1.0*(p->pSat ? sat_solver_memory(p->pSat) : 0)/(1<<20) );
 //            Abc_Print( 1, " %6d %6d ",   p->nLitUsed, p->nLitUseless );
-            Abc_Print( 1, "%9.2f sec ",   1.0*(Abc_Clock() - clkTotal)/CLOCKS_PER_SEC );
+            Abc_Print( 1, "%9.2f [sec] CLK_TOTAL %d",   1.0*(Abc_Clock() - clkTotal)/CLOCKS_PER_SEC,clkTotal );
 //            Abc_Print( 1, "\n" );
 //            ABC_PRMn( "Id2Var", (f+1)*p->nObjNums*4 );
 //            ABC_PRMn( "SAT", 42 * p->pSat->size + 16 * (int)p->pSat->stats.clauses + 4 * (int)p->pSat->stats.clauses_literals );
@@ -1924,8 +2342,15 @@ nTimeUndec += clkSatRun;
             Abc_Print( 1, "\n" );
             fflush( stdout );
         }
-    }
-    // consider the next timeframe
+        sgr_print_message?showVid2var(p,pAig,f):printf("\n");
+        //showVid2var(p,pAig,f); // Call to print the content of the vId2Var vector for each time frame
+    }//--------------------End of for loop over timeframes-------------------
+    // consider the next timeframef
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] End of bmc3 \n");
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] Total SAT Call(ter Sim losses): %d  Total frames: %d Ter Sim Wins: %d\n",count_SAT_Calls,f,f-count_SAT_Calls);
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)] Total SAT Call(ter Sim losses): %f% Total frames: %d Ter Sim Wins: %f%\n",(float)(count_SAT_Calls*100/f),f,(float)((f-count_SAT_Calls)*100/f));
+    //printf("Total Frames: %d  %d\n",f,pPars->nFramesMax);
+    printf("[src/sat/bmc/bmcbmc3.c/Saig_ManBmcScalable(...)]**************************************************\n");
     if ( nJumpFrame && pPars->nStart == 0 )
         pPars->iFrame = nJumpFrame - pPars->nFramesJump;
     else if ( RetValue == -1 && pPars->nStart == 0 )
@@ -1951,6 +2376,187 @@ finish:
 ////////////////////////////////////////////////////////////////////////
 ///                       END OF FILE                                ///
 ////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////
+///                       FUNCTION BY SGR                                ///
+////////////////////////////////////////////////////////////////////////////
+
+
+void showVid2var(Gia_ManBmc_t * p,Aig_Man_t * pAig,int frame)
+{
+        int entry,i;
+        Vec_Int_t *vFrame=(Vec_Int_t *)Vec_PtrEntry(p->vId2Var,frame); // Extract the row for Frame f
+        printf("\nContent of vId2Var for Frame %d:\n",frame);
+        Vec_FltForEachEntry(vFrame,entry,i)
+        {
+            printf("Frame %d, Index %d, Value %d\n",frame,i,entry);
+        }
+
+}
+/* ── SGR: print vId2Var ──────────────────────────────────────────────────
+ * Prints the SAT literal table for every frame opened so far.
+ *
+ * Call after at least one frame has been opened, e.g. after the f==0
+ * pre-registration block or after Saig_ManBmcCreateCnf runs.
+ *
+ * Usage:   SGR_PrintId2Var( p, pAig );
+ * ──────────────────────────────────────────────────────────────────────── */
+void SGR_PrintId2Var( Gia_ManBmc_t * p, Aig_Man_t * pAig )
+{
+    int         i, f;
+    int         nFrames = Vec_PtrSize( p->vId2Var );  /* how many frames opened */
+
+    printf("[SGR] ══ vId2Var dump ══════════════════════════════════════\n");
+    printf("[SGR]   nObjNums = %d   nFrames opened = %d\n",
+           p->nObjNums, nFrames);
+    printf("[SGR]   Literal encoding: -1=unset  0=FALSE  1=TRUE"
+           "  even=pos_var  odd=neg_var\n");
+    printf("[SGR] ────────────────────────────────────────────────────────\n");
+
+    /* ── column header ── */
+    printf("[SGR]   %-5s  %-12s  %-8s", "Num#", "Node", "Type");
+    for ( f = 0; f < nFrames; f++ )
+        printf("  frame%-2d ", f);
+    printf("\n");
+    printf("[SGR]   ────────────────────────────────────────────────\n");
+
+    /* ── one row per compact number ── */
+    for ( i = 0; i < Aig_ManObjNumMax(pAig); i++ )
+    {
+        int num = Vec_IntEntry( p->vId2Num, i );
+        if ( num < 0 )
+            continue;                   /* excluded node (e.g. n3 absorbed) */
+
+        /* get node name and type string */
+        Aig_Obj_t  * pObj = Aig_ManObj( pAig, i );
+        const char * type =
+            Aig_ObjIsConst1(pObj)        ? "CONST1"   :
+            Saig_ObjIsPi(pAig, pObj)     ? "PI"       :
+            Saig_ObjIsLo(pAig, pObj)     ? "LO(reg)"  :
+            Aig_ObjIsAnd(pObj)           ? "AND(cut)"  :
+            Saig_ObjIsPo(pAig, pObj)     ? "PO"       :
+            Saig_ObjIsLi(pAig, pObj)     ? "LI(reg)"  : "???";
+
+        printf("[SGR]   %-5d  Id=%-3d %-5s  %-8s",
+               num, i, "", type);
+
+        /* ── one column per frame ── */
+        for ( f = 0; f < nFrames; f++ )
+        {
+            Vec_Int_t * vFrame =
+                (Vec_Int_t *)Vec_PtrEntry( p->vId2Var, f );
+            int lit = Vec_IntEntry( vFrame, num );
+
+            if      ( lit == -1 )
+                printf("  %-8s", "unset");
+            else if ( lit ==  0 )
+                printf("  %-8s", "FALSE(0)");
+            else if ( lit ==  1 )
+                printf("  %-8s", "TRUE(1)");
+            else
+                printf("  lit=%-4d", lit);   /* real SAT literal */
+        }
+        printf("\n");
+    }
+
+    printf("[SGR] ══ end vId2Var ════════════════════════════════════════\n\n");
+}
+/* ── end SGR ──────────────────────────────────────────────────────────── */
+void SGR_PrintPInfo( Aig_Man_t * pAig,unsigned  * pInfo,int iFrame )
+{
+    const char * names[] = { "NON DET YET", "ZER(0)", "ONE(1)", "UND(X)" };
+    Aig_Obj_t * pObj;
+    int i, w, nWords;
+
+    /* raw word dump */
+    nWords = Abc_BitWordNum(2 * Aig_ManObjNumMax(pAig));
+    printf("\n[/src/sat/bmc/bmcBmc3.c->SGR_PrintPInfo(..)][pInfo Hold per frame ternary Simu Result] frame=%d  nWords=%d", iFrame, nWords);
+    printf("\n[/src/sat/bmc/bmcBmc3.c->SGR_PrintPInfo(..)]Raw words inside pInfo[iFrame=%d]: ",iFrame);
+    for (w = 0; w < nWords; w++)
+        printf("\npInfo[%d]=0x%08X  ", w, pInfo[w]);
+    printf("");
+
+    /* per-node dump */
+    printf("\n[SGR]  %-5s  %-10s  %-8s  %s","Id", "Type", "2-bit", "TerSim value");
+    printf("\n[SGR]  ─────────────────────────────────────");
+
+    /* CONST1 */
+    pObj = Aig_ManConst1(pAig);
+    { 
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("\n[SGR]  %-5d  %-10s  %s",Aig_ObjId(pObj), "CONST1", names[v]); 
+    }
+              /* PIs */
+    Saig_ManForEachPi(pAig, pObj, i)
+    { 
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("\n[SGR]  %-5d  %-10s  %s",Aig_ObjId(pObj), "PI", names[v]); 
+    }
+
+    /* LOs */
+    Saig_ManForEachLo(pAig, pObj, i)
+    { 
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("\n[SGR]  %-5d  %-10s  %s  %s",Aig_ObjId(pObj), "LO(reg)", names[v], iFrame==0?"(reset)":"(stitched)"); 
+    }
+
+    /* AND nodes */
+    Aig_ManForEachNode(pAig, pObj, i)
+    { 
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("\n[SGR]  %-5d  %-10s  %s  %s",Aig_ObjId(pObj), "AND", names[v], v==SAIG_TER_UND?"→ needs SAT":"-> {NOT YET SET,FALSE,TRUE}"); }
+
+    /* COs */
+    Aig_ManForEachCo(pAig, pObj, i)
+    { 
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("\n[SGR]  %-5d  %-10s  %s",Aig_ObjId(pObj),Saig_ObjIsPo(pAig,pObj)?"PO":"LI(reg)", names[v]); 
+    }
+    printf("\n[SGR][pInfo print Done] frame=%d done\n", iFrame);
+    printf("─────────────────────────────────────\n");
+}
+
+
+void print_Tervalues(Aig_Man_t * pAig, unsigned * pInfo, int frame)
+{
+    Aig_Obj_t * pObj;
+    int i;
+    const char *ter[]={"NON DET Yet", "ZER(0)", "ONE(1)", "UND(X)"};
+    printf("\n[/src/sat/bmc/bmcBmc3.c->print_Tervalues(..)] TerSim values for frame %d:\n",frame);
+    Saig_ManForEachPi(pAig, pObj, i)
+    {
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("[SGR]   PI Id=%-3d  TerSim value=%s\n", Aig_ObjId(pObj), ter[v]);
+    }
+    Saig_ManForEachLo(pAig, pObj, i)
+    {
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("[SGR]   LO Id=%-3d  TerSim value=%s\n", Aig_ObjId(pObj), ter[v]);
+    }
+    printf("[SGR]   PO nodes:\n");
+    Saig_ManForEachPo(pAig, pObj, i)
+    {
+        int v = Saig_ManBmcSimInfoGet(pInfo,pObj);
+        printf("[SGR]   PO Id=%-3d  TerSim value=%s Val(v=%d)\n", Aig_ObjId(pObj), ter[v],v);
+        //printf("[SGR] %s\n",Saig_ManBmcSimInfoGetStr(pInfo,pObj)==SAIG_TER_UND ?"-> needs SAT":"->TerSim done SAT NOT NEEDED \n");
+        if (Saig_ManBmcSimInfoGet(pInfo,pObj) == SAIG_TER_UND)
+        {
+            printf("[SGR]   PO Id=%-3d  TerSim value=%s  -> needs SAT\n", Aig_ObjId(pObj), ter[v]);
+        }
+        else if (Saig_ManBmcSimInfoGet(pInfo,pObj) == SAIG_TER_ZER || SAIG_TER_ONE)
+        {
+            printf("[SGR]   PO Id=%-3d  TerSim value=%s  - ZERO or ONE  --> TerSim done -->  SAT NOT NEEDED \n", Aig_ObjId(pObj), ter[v]);
+        }
+        else
+        {
+            printf("[SGR]   PO Id=%-3d  TerSim value=%s  - NON   -->  ??? \n", Aig_ObjId(pObj), ter[v]);
+        }
+        
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////
+///                       END OF FUNCTION BY SGR                                ///
+///////////////////////////////////////////////////////////////////////////////////
 
 
 ABC_NAMESPACE_IMPL_END

@@ -2638,20 +2638,28 @@ int Abc_NtkDarBmc3( Abc_Ntk_t * pNtk, Saig_ParBmc_t * pPars, int fOrDecomp )
     int status, RetValue = -1;
     abctime clk = Abc_Clock();
     abctime nTimeOut = pPars->nTimeOut ? pPars->nTimeOut * CLOCKS_PER_SEC + Abc_Clock(): 0;
+    printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] fOrDecomp = %d, pPars->fSolveAll = %d\n", fOrDecomp, pPars->fSolveAll);
     if ( fOrDecomp && !pPars->fSolveAll )
         pMan = Abc_NtkToDarBmc( pNtk, &vMap );
-    else
+    else{
+        printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] Calling Abc_NtkToDar(pNtk,0,1) BEGIN\n");
         pMan = Abc_NtkToDar( pNtk, 0, 1 );
+        printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] Calling Abc_NtkToDar(pNtk,0,1) END\n");
+    }
+        
     if ( pMan == NULL )
     {
         Abc_Print( 1, "Converting miter into AIG has failed.\n" );
         return RetValue;
     }
     assert( pMan->nRegs > 0 );
+    printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] pMan->nRegs = %d\n", pMan->nRegs);
+
     if ( pPars->fVerbose && vMap && Abc_NtkPoNum(pNtk) != Saig_ManPoNum(pMan) ) 
         Abc_Print( 1, "Expanded %d outputs into %d outputs using OR decomposition.\n", Abc_NtkPoNum(pNtk), Saig_ManPoNum(pMan) );
-
+    printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] Calling Saig_ManBmcScalable(pMan,pPars) BEGIN\n");
     RetValue = Saig_ManBmcScalable( pMan, pPars );
+    printf("[src/base/abci/abcDar.c/Abc_NtkDarBmc3] Calling Saig_ManBmcScalable(pMan,pPars) END\n");
     ABC_FREE( pNtk->pModel );
     ABC_FREE( pNtk->pSeqModel );
     pNtk->pSeqModel = pMan->pSeqModel; pMan->pSeqModel = NULL;

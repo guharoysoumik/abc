@@ -138,7 +138,7 @@ static inline sn_blast_hier_ref_t sn_boundary_parent_ref(const sn_design_t* desi
     assert(sn_obj_type(module, ref.object) == SN_PI && occurrence->parent_occurrence != SN_INVALID_ID);
     parent = sn_design_get_module_const(
         design, sn_vec_at(sn_blast_occurrence_t, &boundary->occurrences, occurrence->parent_occurrence).module);
-    parent_fanin = sn_obj_fanin(parent, occurrence->parent_inst, sn_obj_data(module, ref.object));
+    parent_fanin = sn_obj_fanin(parent, occurrence->parent_inst, sn_obj_type_id(module, ref.object));
     ref.occurrence = occurrence->parent_occurrence;
     ref.object = parent_fanin;
     return ref;
@@ -231,27 +231,6 @@ static inline sn_obj_id_t sn_boundary_resolve_external(sn_boundary_regs_t* regs,
             stack.size--;
             continue;
         }
-        if (type == SN_GATE || type == SN_FAN)
-        {
-            sn_obj_id_t owner = type == SN_GATE ? ref.object : sn_fan_owner(module, ref.object);
-            sn_boundary_link_t* link = sn_boundary_link_find(regs, ref.occurrence, owner, false);
-            if (link && link->primitive != SN_INVALID_ID)
-            {
-                uint32_t output = type == SN_GATE ? 0 : sn_fan_output_index(module, ref.object);
-                copies[ref.object] = regs->primitive_pairs[regs->primitive_offsets[link->primitive] + output].out;
-                stack.size--;
-                continue;
-            }
-        }
-        if (type == SN_FAN && sn_obj_type(module, sn_fan_owner(module, ref.object)) == SN_GATE)
-        {
-            sn_blast_hier_ref_t dependency = {ref.occurrence, sn_fan_owner(module, ref.object), 0};
-            // Visiting the owner creates the complete adjacent output block.
-            sn_boundary_external_frame_t* child = sn_vec_push(sn_boundary_external_frame_t, &stack);
-            memset(child, 0, sizeof(*child));
-            child->ref = dependency;
-            continue;
-        }
         if (type == SN_INST || type == SN_FAN)
         {
             sn_obj_id_t inst = type == SN_INST ? ref.object : sn_fan_inst_id(module, ref.object);
@@ -262,7 +241,7 @@ static inline sn_obj_id_t sn_boundary_resolve_external(sn_boundary_regs_t* regs,
             {
                 const sn_blast_primitive_t* primitive =
                     &sn_vec_at(sn_blast_primitive_t, &regs->boundary->primitives, link->primitive);
-                assert(output < primitive->output_count);
+                assert(output < sn_design_module_output_count(regs->design, primitive->module));
                 (void)primitive;
                 copies[ref.object] = regs->primitive_pairs[regs->primitive_offsets[link->primitive] + output].out;
                 stack.size--;
@@ -329,16 +308,7 @@ static inline sn_obj_id_t sn_boundary_resolve_external(sn_boundary_regs_t* regs,
         assert(type == SN_BUF || (type >= SN_POS && type <= SN_GATE));
         frame->result = sn_module_dup_obj_skeleton(regs->result, module, ref.object);
         copies[ref.object] = frame->result;
-        sn_module_dup_obj_metadata(regs->result, frame->result, module, ref.object);
-        if (type == SN_GATE && sn_gate_output_count(module, ref.object) > 1)
-            for (uint32_t output = 0; output < sn_gate_output_count(module, ref.object); output++)
-            {
-                sn_obj_id_t old_fan = sn_owner_output(module, ref.object, output);
-                sn_obj_id_t fan = sn_module_dup_obj_skeleton(regs->result, module, old_fan);
-                sn_module_dup_obj_metadata(regs->result, fan, module, old_fan);
-                sn_obj_connect(regs->result, fan, 0, frame->result);
-                copies[old_fan] = fan;
-            }
+        sn_module_dup_obj_metadata(regs->result, sn_obj_type_id(regs->result, frame->result), module, ref.object);
         frame->phase = SN_BOUNDARY_EXTERNAL_OPERATOR;
         frame->next_fanin = 0;
     }
@@ -347,35 +317,6 @@ static inline sn_obj_id_t sn_boundary_resolve_external(sn_boundary_regs_t* regs,
     sn_obj_id_t result = root_copies[root.object];
     sn_vec_destroy(&stack);
     return result;
-}
-
-// Reconstructed objects carry hierarchical names ("inst.inst.leaf"), and unnamed loops the canonical driver name,
-// so a blast of the rebuilt module names its boundary bits exactly as the blast of the original hierarchy did.
-static inline char* sn_boundary_hier_name(const sn_design_t* design, const sn_blast_boundary_t* boundary,
-                                          uint32_t occurrence, const char* leaf)
-{
-    sn_blast_name_t name = {NULL, 0, 0};
-    bool canonical = true;
-    if (!leaf)
-        return NULL;
-    sn_blast_occurrence_path(design, boundary, occurrence, &name, &canonical);
-    sn_blast_name_append(&name, leaf);
-    return name.text;
-}
-
-static inline char* sn_boundary_loop_name(const sn_design_t* design, const sn_blast_boundary_t* boundary,
-                                          uint32_t occurrence, const sn_module_t* module, sn_obj_id_t loop_out)
-{
-    sn_blast_name_t name = {NULL, 0, 0};
-    bool canonical = true;
-    sn_blast_occurrence_path(design, boundary, occurrence, &name, &canonical);
-    sn_blast_loop_base_name(design, module, loop_out, &name, &canonical);
-    if (!canonical)
-    {
-        free(name.text);
-        return NULL;
-    }
-    return name.text;
 }
 
 static inline void sn_boundary_regs_init(sn_boundary_regs_t* regs, sn_design_t* design,
@@ -402,7 +343,7 @@ static inline void sn_boundary_regs_init(sn_boundary_regs_t* regs, sn_design_t* 
     {
         const sn_blast_primitive_t* entry = &sn_vec_at(sn_blast_primitive_t, &boundary->primitives, i);
         regs->primitive_offsets[i] = primitive_output_count;
-        primitive_output_count += entry->output_count;
+        primitive_output_count += sn_design_module_output_count(design, entry->module);
     }
     if (boundary->primitives.size)
         regs->primitive_offsets[boundary->primitives.size] = primitive_output_count;
@@ -416,9 +357,12 @@ static inline void sn_boundary_regs_init(sn_boundary_regs_t* regs, sn_design_t* 
         const sn_blast_occurrence_t* occurrence =
             &sn_vec_at(sn_blast_occurrence_t, &boundary->occurrences, entry->occurrence);
         const sn_module_t* module = sn_design_get_module_const(design, occurrence->module);
-        for (size_t output = 0; output < entry->output_count; output++)
+        const sn_module_t* child = sn_design_get_module_const(design, entry->module);
+        for (size_t output = 0; output < child->type_objects[SN_PO].size; output++)
         {
-            sn_obj_id_t old_output = sn_owner_output(module, entry->inst, (uint32_t)output);
+            sn_obj_id_t old_output = child->type_objects[SN_PO].size == 1
+                                         ? entry->inst
+                                         : sn_inst_output(module, entry->inst, (uint32_t)output);
             const char* output_name = sn_obj_name_id(module, old_output) == SN_INVALID_ID
                                           ? NULL
                                           : sn_obj_name(module, old_output);
@@ -439,15 +383,11 @@ static inline void sn_boundary_regs_init(sn_boundary_regs_t* regs, sn_design_t* 
         const sn_module_t* module = sn_design_get_module_const(design, occurrence->module);
         sn_obj_id_t old_out = entry->reg_out;
         sn_obj_id_t old_in = sn_obj_pair_in(module, old_out);
-        char* out_name = sn_boundary_hier_name(design, boundary, entry->occurrence,
-            sn_obj_name_id(module, old_out) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_out));
-        char* in_name = sn_boundary_hier_name(design, boundary, entry->occurrence,
-            sn_obj_name_id(module, old_in) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_in));
+        const char* out_name = sn_obj_name_id(module, old_out) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_out);
+        const char* in_name = sn_obj_name_id(module, old_in) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_in);
         regs->pairs[i] = sn_module_add_reg_pair(result, entry->width, sn_obj_is_signed(module, old_out),
                                                  out_name, in_name, SN_INVALID_ID);
         sn_reg_set_flags(result, regs->pairs[i].out, sn_obj_reg_flags(module, old_out));
-        free(out_name);
-        free(in_name);
     }
     regs->loops = boundary->loops.size ? (sn_obj_pair_t*)malloc(sizeof(sn_obj_pair_t) * boundary->loops.size) : NULL;
     assert(regs->loops || boundary->loops.size == 0);
@@ -458,13 +398,12 @@ static inline void sn_boundary_regs_init(sn_boundary_regs_t* regs, sn_design_t* 
             &sn_vec_at(sn_blast_occurrence_t, &boundary->occurrences, entry->occurrence);
         const sn_module_t* module = sn_design_get_module_const(design, occurrence->module);
         sn_obj_id_t old_in = sn_obj_pair_in(module, entry->loop_out);
-        char* out_name = sn_boundary_loop_name(design, boundary, entry->occurrence, module, entry->loop_out);
-        char* in_name = sn_boundary_hier_name(design, boundary, entry->occurrence,
-            sn_obj_name_id(module, old_in) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_in));
+        const char* out_name = sn_obj_name_id(module, entry->loop_out) == SN_INVALID_ID
+                                   ? NULL
+                                   : sn_obj_name(module, entry->loop_out);
+        const char* in_name = sn_obj_name_id(module, old_in) == SN_INVALID_ID ? NULL : sn_obj_name(module, old_in);
         regs->loops[i] = sn_module_add_loop_pair(result, entry->width,
                                                   sn_obj_is_signed(module, entry->loop_out), out_name, in_name);
-        free(out_name);
-        free(in_name);
     }
 
     size_t link_count = boundary->primitives.size + boundary->registers.size + boundary->loops.size;
@@ -513,7 +452,7 @@ static inline sn_obj_id_t sn_boundary_primitive_output_bit(sn_boundary_regs_t* r
 {
     assert(owner < regs->boundary->primitives.size);
     const sn_blast_primitive_t* entry = &sn_vec_at(sn_blast_primitive_t, &regs->boundary->primitives, owner);
-    assert(port < entry->output_count);
+    assert(port < sn_design_module_output_count(regs->design, entry->module));
     (void)entry;
     sn_obj_id_t output = regs->primitive_pairs[regs->primitive_offsets[owner] + port].out;
     assert(bit < sn_obj_width(regs->result, output));
@@ -543,7 +482,6 @@ static inline sn_obj_id_t sn_boundary_co_word(sn_boundary_regs_t* regs, const sn
     {
         sn_blast_boundary_bit_t endpoint =
             sn_vec_at(sn_blast_boundary_bit_t, &regs->boundary->cos, begin + bit);
-        (void)endpoint;
         assert(endpoint.kind == kind && endpoint.owner == owner &&
                (port == SN_INVALID_ID || endpoint.port == port) && endpoint.signal.bit == bit);
     }
@@ -560,16 +498,6 @@ typedef struct sn_boundary_dfs_frame_t
 // have already been replaced by the corresponding primitive outputs. One iterative Kosaraju traversal identifies
 // the resulting strongly connected components; a substituted edge whose endpoints share a component must retain
 // its loop pair. This replaces one complete cone walk per primitive output by linear whole-module graph work.
-// The IN-to-OUT edge inside a register, memory, or loop pair is a sequential or explicit ordering cut, not a
-// combinational dependency. Cycle analysis must stop there, as the frontend does, so that a primitive output whose
-// feedback is already broken by an existing pair does not receive a second, redundant pair.
-static inline bool sn_boundary_is_pair_edge(const sn_module_t* module, sn_obj_id_t from, sn_obj_id_t to)
-{
-    return sn_obj_type_is_pair_out(sn_obj_type(module, to)) && sn_obj_pair_in(module, to) == from;
-}
-
-// Keeps only the temporary pairs whose real output still lies on a combinational cycle (Kosaraju SCCs over the
-// module graph with pair edges removed).
 static inline void sn_boundary_mark_feedback_pairs(sn_module_t* module, const sn_obj_id_t* actual_to_pair,
                                                    uint8_t* keep)
 {
@@ -599,7 +527,7 @@ static inline void sn_boundary_mark_feedback_pairs(sn_module_t* module, const sn
             if (frame->next_fanout < count)
             {
                 sn_obj_id_t fanout = sn_obj_fanout(module, frame->object, frame->next_fanout++);
-                if (!visited[fanout] && !sn_boundary_is_pair_edge(module, frame->object, fanout))
+                if (!visited[fanout])
                 {
                     visited[fanout] = 1;
                     sn_boundary_dfs_frame_t* child = sn_vec_push(sn_boundary_dfs_frame_t, &stack);
@@ -629,8 +557,7 @@ static inline void sn_boundary_mark_feedback_pairs(sn_module_t* module, const sn
             for (uint32_t k = 0; k < sn_obj_fanin_count(module, object); k++)
             {
                 sn_obj_id_t fanin = sn_obj_fanin(module, object, k);
-                if (fanin != SN_INVALID_ID && components[fanin] == UINT32_MAX &&
-                    !sn_boundary_is_pair_edge(module, fanin, object))
+                if (fanin != SN_INVALID_ID && components[fanin] == UINT32_MAX)
                 {
                     components[fanin] = component_count;
                     *sn_vec_push(sn_obj_id_t, &stack) = fanin;
@@ -710,7 +637,6 @@ static inline sn_module_id_t sn_boundary_dup_filtered_topo(sn_design_t* design, 
 
     sn_module_id_t target_id = sn_design_add_module(design, name);
     sn_module_t* target = sn_design_get_module(design, target_id);
-    sn_module_dup_module_metadata(target, source);
     sn_vec_resize(sn_obj_id_t, &source->copy_ids, object_count);
     for (sn_obj_id_t object = 0; object < object_count; object++)
         sn_vec_at(sn_obj_id_t, &source->copy_ids, object) = SN_INVALID_ID;
@@ -720,12 +646,18 @@ static inline sn_module_id_t sn_boundary_dup_filtered_topo(sn_design_t* design, 
         sn_vec_at(sn_obj_id_t, &source->copy_ids, old_object) =
             sn_module_dup_obj_skeleton(target, source, old_object);
     }
-    sn_module_order_pairs_by_source(target, source);
+    sn_module_clean_rebuild_pair_ids(target, source, SN_REG_OUT, SN_REG_IN);
+    sn_module_clean_rebuild_pair_ids(target, source, SN_MEM_OUT, SN_MEM_IN);
+    sn_module_clean_rebuild_pair_ids(target, source, SN_LOOP_OUT, SN_LOOP_IN);
     for (size_t i = 0; i < order.size; i++)
     {
         sn_obj_id_t old_object = sn_vec_at(sn_obj_id_t, &order, i);
         sn_obj_id_t new_object = sn_vec_at(sn_obj_id_t, &source->copy_ids, old_object);
-        sn_module_dup_obj_metadata(target, new_object, source, old_object);
+        sn_obj_type_t type = sn_obj_type(source, old_object);
+        sn_module_dup_obj_metadata(target, sn_obj_type_id(target, new_object), source, old_object);
+        if (type == SN_FAN)
+            sn_vec_at(sn_obj_id_t, &target->fan_insts, sn_obj_type_id(target, new_object)) =
+                sn_vec_at(sn_obj_id_t, &source->copy_ids, sn_fan_inst_id(source, old_object));
         for (uint32_t j = 0; j < sn_obj_fanin_count(source, old_object); j++)
         {
             sn_obj_id_t old_fanin = sn_obj_fanin(source, old_object, j);
@@ -736,7 +668,6 @@ static inline sn_module_id_t sn_boundary_dup_filtered_topo(sn_design_t* design, 
             sn_obj_connect(target, new_object, j, new_fanin);
         }
     }
-    sn_module_link_pairs(target);
     source->copy_module = target_id;
     sn_vec_destroy(&order);
     free(marks);
@@ -759,7 +690,7 @@ static inline void sn_boundary_prune_primitive_pairs(sn_boundary_regs_t* regs)
     for (size_t i = 0; i < regs->boundary->primitives.size; i++)
     {
         const sn_blast_primitive_t* entry = &sn_vec_at(sn_blast_primitive_t, &regs->boundary->primitives, i);
-        uint32_t output_count = entry->output_count;
+        uint32_t output_count = sn_design_module_output_count(regs->design, entry->module);
         for (uint32_t output = 0; output < output_count; output++)
         {
             sn_obj_pair_t pair = regs->primitive_pairs[regs->primitive_offsets[i] + output];
@@ -804,7 +735,6 @@ static inline void sn_boundary_prune_primitive_pairs(sn_boundary_regs_t* regs)
         do
         {
             int length = snprintf(name, sizeof(name), "__sn_boundary_%u_%u", source->id, suffix++);
-            (void)length;
             assert(length >= 0 && (size_t)length < sizeof(name) && suffix != 0);
         } while (sn_name_find(&regs->design->names, name) != SN_INVALID_ID);
         sn_module_id_t source_id = source->id;
@@ -838,39 +768,29 @@ static inline void sn_boundary_regs_finish(sn_boundary_regs_t* regs, const sn_ob
         const sn_blast_occurrence_t* occurrence =
             &sn_vec_at(sn_blast_occurrence_t, &regs->boundary->occurrences, entry->occurrence);
         const sn_module_t* module = sn_design_get_module_const(regs->design, occurrence->module);
-        bool gate = sn_obj_type(module, entry->inst) == SN_GATE;
-        const sn_module_t* child = gate ? NULL : sn_design_get_module_const(regs->design, entry->module);
-        uint32_t input_count = sn_obj_fanin_count(module, entry->inst);
+        const sn_module_t* child = sn_design_get_module_const(regs->design, entry->module);
+        uint32_t input_count = (uint32_t)child->type_objects[SN_PI].size;
         sn_obj_id_t* inputs = input_count ? (sn_obj_id_t*)malloc(sizeof(sn_obj_id_t) * input_count) : NULL;
         assert(inputs || input_count == 0);
         uint32_t co_begin = entry->co_begin;
         for (uint32_t input = 0; input < input_count; input++)
         {
-            uint32_t width = gate ? 1 : sn_obj_width(child, sn_vec_at(sn_obj_id_t, &child->type_objects[SN_PI], input));
+            sn_obj_id_t port = sn_vec_at(sn_obj_id_t, &child->type_objects[SN_PI], input);
+            uint32_t width = sn_obj_width(child, port);
             inputs[input] = sn_boundary_co_word(regs, co_drivers, co_begin, SN_BLAST_BOUNDARY_PRIMITIVE_INPUT,
                                                  (uint32_t)i, input, width);
             co_begin += width;
         }
         assert(co_begin == entry->co_begin + entry->co_count);
-        char* inst_name = sn_boundary_hier_name(regs->design, regs->boundary, entry->occurrence,
-            sn_obj_name_id(module, entry->inst) == SN_INVALID_ID ? NULL : sn_obj_name(module, entry->inst));
-        sn_obj_id_t inst = gate
-            ? sn_module_add_library_gate(regs->result, sn_obj_gate_id(module, entry->inst), inputs, inst_name, NULL)
-            : sn_module_add_inst(regs->result, entry->module, input_count, inputs, inst_name, NULL);
-        size_t first_attribute = regs->result->attribute_records.size;
-        sn_module_dup_obj_annotations(regs->result, inst, module, entry->inst);
-        char* state_prefix = sn_boundary_hier_name(regs->design, regs->boundary, entry->occurrence, "");
-        sn_module_prefix_state_names(regs->result, first_attribute, state_prefix);
-        free(state_prefix);
-        free(inst_name);
+        const char* inst_name = sn_obj_name_id(module, entry->inst) == SN_INVALID_ID
+                                    ? NULL
+                                    : sn_obj_name(module, entry->inst);
+        sn_obj_id_t inst = sn_module_add_inst(regs->result, entry->module, input_count, inputs, inst_name, NULL);
         free(inputs);
-        for (uint32_t output = 0; output < entry->output_count; output++)
+        for (uint32_t output = 0; output < child->type_objects[SN_PO].size; output++)
         {
-            if (!gate || entry->output_count > 1)
-                sn_module_dup_obj_annotations(regs->result, sn_owner_output(regs->result, inst, output),
-                                               module, sn_owner_output(module, entry->inst, output));
             sn_obj_pair_t pair = regs->primitive_pairs[regs->primitive_offsets[i] + output];
-            sn_obj_connect(regs->result, pair.in, 0, sn_owner_output(regs->result, inst, output));
+            sn_obj_connect(regs->result, pair.in, 0, sn_inst_output(regs->result, inst, output));
         }
     }
     for (size_t i = 0; i < regs->boundary->loops.size; i++)
@@ -888,25 +808,24 @@ static inline void sn_boundary_regs_finish(sn_boundary_regs_t* regs, const sn_ob
         const sn_module_t* module = sn_design_get_module_const(regs->design, occurrence->module);
         sn_obj_id_t old_out = entry->reg_out;
         sn_obj_pair_t pair = regs->pairs[i];
-        sn_obj_id_t old_clock = sn_reg_fanin(module, old_out, SN_REG_CLOCK);
+        sn_obj_id_t old_clock = sn_obj_fanin(module, old_out, SN_REG_CLOCK);
         if (old_clock != SN_INVALID_ID)
         {
             sn_blast_hier_ref_t ref = {entry->occurrence, old_clock, 0};
-            sn_reg_set_fanin(regs->result, pair.in, SN_REG_CLOCK, sn_boundary_resolve_external(regs, ref));
+            sn_reg_set_fanin(regs->result, pair.out, SN_REG_CLOCK, sn_boundary_resolve_external(regs, ref));
         }
         const uint32_t slots[] = {SN_REG_ENABLE, SN_REG_SET, SN_REG_RESET, SN_REG_RESET_VALUE};
         for (size_t k = 0; k < sizeof(slots) / sizeof(slots[0]); k++)
         {
             uint32_t slot = slots[k];
-            sn_obj_id_t old_fanin = sn_reg_fanin(module, old_out, (sn_reg_fanin_t)slot);
+            sn_obj_id_t old_fanin = sn_obj_fanin(module, old_out, slot);
             if (old_fanin == SN_INVALID_ID)
                 continue;
-            // The extraction mode decides whether this control was part of the AIG boundary. In sequential mode
-            // flop controls are folded into D or retained externally, while latch controls are always explicit.
-            bool in_cloud = entry->control_co_begin[slot] != SN_INVALID_ID;
+            bool in_cloud = sn_blast_reg_control_is_comb_output(module, old_out, slot);
             sn_obj_id_t fanin;
             if (in_cloud)
             {
+                assert(entry->control_co_begin[slot] != SN_INVALID_ID);
                 fanin = sn_boundary_co_word(regs, co_drivers, entry->control_co_begin[slot],
                                             SN_BLAST_BOUNDARY_REG_CONTROL, (uint32_t)i, slot,
                                             sn_obj_width(module, old_fanin));
@@ -916,15 +835,15 @@ static inline void sn_boundary_regs_finish(sn_boundary_regs_t* regs, const sn_ob
                 sn_blast_hier_ref_t ref = {entry->occurrence, old_fanin, 0};
                 fanin = sn_boundary_resolve_external(regs, ref);
             }
-            sn_reg_set_fanin(regs->result, pair.in, (sn_reg_fanin_t)slot, fanin);
+            sn_reg_set_fanin(regs->result, pair.out, (sn_reg_fanin_t)slot, fanin);
         }
         for (uint32_t slot = SN_REG_INIT_DATA; slot <= SN_REG_INIT_MASK; slot++)
         {
-            sn_obj_id_t old_fanin = sn_reg_fanin(module, old_out, (sn_reg_fanin_t)slot);
+            sn_obj_id_t old_fanin = sn_obj_fanin(module, old_out, slot);
             if (old_fanin != SN_INVALID_ID)
             {
                 sn_blast_hier_ref_t ref = {entry->occurrence, old_fanin, 0};
-                sn_reg_set_fanin(regs->result, pair.in, (sn_reg_fanin_t)slot,
+                sn_reg_set_fanin(regs->result, pair.out, (sn_reg_fanin_t)slot,
                                  sn_boundary_resolve_external(regs, ref));
             }
         }

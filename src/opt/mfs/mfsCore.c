@@ -235,37 +235,36 @@ void Abc_NtkMfsPowerResub( Mfs_Man_t * p, Mfs_Par_t * pPars)
 ***********************************************************************/
 int Abc_NtkMfsResub( Mfs_Man_t * p, Abc_Obj_t * pNode )
 {
-    int fVerbose = p->pPars->fVerbose;
     abctime clk;
     p->nNodesTried++;
     // prepare data structure for this node
     Mfs_ManClean( p );
     // compute window roots, window support, and window nodes
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     p->vRoots = Abc_MfsComputeRoots( pNode, p->pPars->nWinTfoLevs, p->pPars->nFanoutsMax );
     p->vSupp  = Abc_NtkNodeSupport( p->pNtk, (Abc_Obj_t **)Vec_PtrArray(p->vRoots), Vec_PtrSize(p->vRoots) );
     p->vNodes = Abc_NtkDfsNodes( p->pNtk, (Abc_Obj_t **)Vec_PtrArray(p->vRoots), Vec_PtrSize(p->vRoots) );
-    ABC_TIME_STOP(fVerbose, p->timeWin, clk);
+p->timeWin += Abc_Clock() - clk;
     if ( p->pPars->nWinMax && Vec_PtrSize(p->vNodes) > p->pPars->nWinMax )
     {
         p->nMaxDivs++;
         return 1;
     }
     // compute the divisors of the window
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     p->vDivs  = Abc_MfsComputeDivisors( p, pNode, Abc_ObjRequiredLevel(pNode) - 1 );
     p->nTotalDivs += Vec_PtrSize(p->vDivs) - Abc_ObjFaninNum(pNode);
-    ABC_TIME_STOP(fVerbose, p->timeDiv, clk);
+p->timeDiv += Abc_Clock() - clk;
     // construct AIG for the window
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     p->pAigWin = Abc_NtkConstructAig( p, pNode );
-    ABC_TIME_STOP(fVerbose, p->timeAig, clk);
+p->timeAig += Abc_Clock() - clk;
     // translate it into CNF
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     p->pCnf = Cnf_DeriveSimple( p->pAigWin, 1 + Vec_PtrSize(p->vDivs) );
-    ABC_TIME_STOP(fVerbose, p->timeCnf, clk);
+p->timeCnf += Abc_Clock() - clk;
     // create the SAT problem
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     p->pSat = Abc_MfsCreateSolverResub( p, NULL, 0, 0 );
     if ( p->pSat == NULL )
     {
@@ -287,7 +286,7 @@ int Abc_NtkMfsResub( Mfs_Man_t * p, Abc_Obj_t * pNode )
         if ( p->pPars->fMoreEffort )
             Abc_NtkMfsResubNode2( p, pNode );
     }
-    ABC_TIME_STOP(fVerbose, p->timeSat, clk);
+p->timeSat += Abc_Clock() - clk;
 //    if ( p->pPars->fGiaSat )
 //        Abc_NtkMfsDeconstructGia( p );
     return 1;

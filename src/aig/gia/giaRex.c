@@ -47,7 +47,6 @@ void Gia_ManAutomSimulate( Gia_Man_t * p, Vec_Int_t * vAlpha, char * pSim )
 {
     Gia_Obj_t * pObj, * pObjRi, * pObjRo;
     int nInputs = Vec_IntSize(vAlpha);
-    (void)nInputs;
     int nFrames = strlen(pSim);
     int i, k;
     assert( Gia_ManPiNum(p) == nInputs );
@@ -543,3 +542,4 @@ void Gia_ManAutomWalk( Gia_Man_t * p, int nSteps, int nWalks, int fVerbose )
 
 
 ABC_NAMESPACE_IMPL_END
+

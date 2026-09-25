@@ -8,8 +8,7 @@ ReleaseExt/
 
 _/
 _TEST/
-/sn
-/sn.exe
+tools/
 temp/
 lib/abc*
 lib/m114*

@@ -69,7 +69,6 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
     int Required, nNodesSaved;
     int nNodesSaveCur = -1; // Suppress "might be used uninitialized"
     int i, GainCur = -1, GainBest = -1;
-    int fVerbose = Cut_ManReadParams(pManCut)->fVerbose;
     abctime clk, clk2;//, Counter;
 
     p->nNodesConsidered++;
@@ -77,10 +76,10 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
     Required = fUpdateLevel? Abc_ObjRequiredLevel(pNode) : ABC_INFINITY;
 
     // get the node's cuts
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     pCut = (Cut_Cut_t *)Abc_NodeGetCutsRecursive( pManCut, pNode, 0, 0 );
     assert( pCut != NULL );
-    ABC_TIME_STOP(fVerbose, p->timeCut, clk);
+p->timeCut += Abc_Clock() - clk;
 
 //printf( " %d", Rwr_CutCountNumNodes(pNode, pCut) );
 /*
@@ -90,7 +89,7 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
     printf( "%d ", Counter );
 */
     // go through the cuts
-    ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
     for ( pCut = pCut->pNext; pCut; pCut = pCut->pNext )
     {
         // consider only 4-input cuts
@@ -129,7 +128,7 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
                 continue;
         }
 
-        ABC_TIME_START(fVerbose, clk2);
+clk2 = Abc_Clock();
 /*
         printf( "Considering: (" );
         Vec_PtrForEachEntry( Abc_Obj_t *, p->vFaninsCur, pFanin, i )
@@ -146,12 +145,12 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
         // unmark the fanin boundary
         Vec_PtrForEachEntry( Abc_Obj_t *, p->vFaninsCur, pFanin, i )
             Abc_ObjRegular(pFanin)->vFanouts.nSize--;
-        ABC_TIME_STOP(fVerbose, p->timeMffc, clk2);
+p->timeMffc += Abc_Clock() - clk2;
 
         // evaluate the cut
-        ABC_TIME_START(fVerbose, clk2);
+clk2 = Abc_Clock();
         pGraph = Rwr_CutEvaluate( p, pNode, pCut, p->vFaninsCur, nNodesSaved, Required, &GainCur, fPlaceEnable );
-        ABC_TIME_STOP(fVerbose, p->timeEval, clk2);
+p->timeEval += Abc_Clock() - clk2;
 
         // check if the cut is better than the current best one
         if ( pGraph != NULL && GainBest < GainCur )
@@ -168,7 +167,7 @@ int Rwr_NodeRewrite( Rwr_Man_t * p, Cut_Man_t * pManCut, Abc_Obj_t * pNode, int 
                 Vec_PtrPush( p->vFanins, pFanin );
         }
     }
-    ABC_TIME_STOP(fVerbose, p->timeRes, clk);
+p->timeRes += Abc_Clock() - clk;
 
     if ( GainBest == -1 )
         return -1;

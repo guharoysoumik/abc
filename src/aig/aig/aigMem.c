@@ -96,8 +96,8 @@ struct Aig_MmStep_t_
 Aig_MmFixed_t * Aig_MmFixedStart( int nEntrySize, int nEntriesMax )
 {
     Aig_MmFixed_t * p;
-
-    p = ABC_ALLOC( Aig_MmFixed_t, 1 );
+    printf("[src/aig/aig/aigMem.c] Aig_MmFixedStart:Input ->  nEntrySize: %d, nEntriesMax: %d\n", nEntrySize, nEntriesMax);
+    p = ABC_ALLOC( Aig_MmFixed_t, 1 ); //allocate space for malloc (Aig_MmFixed_t * 1)
     memset( p, 0, sizeof(Aig_MmFixed_t) );
 
     p->nEntrySize    = nEntrySize;
@@ -132,6 +132,8 @@ Aig_MmFixed_t * Aig_MmFixedStart( int nEntrySize, int nEntriesMax )
 void Aig_MmFixedStop( Aig_MmFixed_t * p, int fVerbose )
 {
     int i;
+    printf("[src/aig/aig/aigMem.c] Aig_MmFixedStop\n");
+    fVerbose = 1; //SGR
     if ( p == NULL )
         return;
     if ( fVerbose )
@@ -473,8 +475,6 @@ Aig_MmStep_t * Aig_MmStepStart( int nSteps )
 {
     Aig_MmStep_t * p;
     int i, k;
-    assert( nSteps > 0 && nSteps <= 28 );
-    if ( nSteps <= 0 || nSteps > 28 ) abort();
     p = ABC_ALLOC( Aig_MmStep_t, 1 );
     memset( p, 0, sizeof(Aig_MmStep_t) );
     p->nMems = nSteps;
@@ -605,7 +605,13 @@ int Aig_MmStepReadMemUsage( Aig_MmStep_t * p )
     return nMemTotal;
 }
 
+void SGR_printMemCuts(Aig_MmFixed_t * pMemCuts, Aig_Man_t * pAig, int nCutsmax)
+{
+    printf("\nContent of MemCuts:[Under processing ] \n");
+}
+
 ////////////////////////////////////////////////////////////////////////
 ///                       END OF FILE                                ///
 ////////////////////////////////////////////////////////////////////////
 ABC_NAMESPACE_IMPL_END
+

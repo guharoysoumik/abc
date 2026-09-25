@@ -771,7 +771,6 @@ void Sbd_StoRefObj( Sbd_Sto_t * p, int iObj, int iMirror )
     else if ( Gia_ObjIsCo(pObj) )
     {
         int Lit0m = Vec_IntEntry( p->vMirrors, Gia_ObjFaninId0(pObj, iObj) );
-        (void)Lit0m;
         assert( Lit0m == -1 );
         Vec_IntAddToEntry( p->vRefs, Gia_ObjFaninId0(pObj, iObj), 1 );
     }
@@ -870,3 +869,4 @@ void Sbd_StoComputeCutsTest( Gia_Man_t * pGia )
 
 
 ABC_NAMESPACE_IMPL_END
+

@@ -49,9 +49,7 @@ ABC_NAMESPACE_IMPL_START
 void Abc_SortMerge( int * p1Beg, int * p1End, int * p2Beg, int * p2End, int * pOut )
 {
     int nEntries = (p1End - p1Beg) + (p2End - p2Beg);
-    (void)nEntries;
     int * pOutBeg = pOut;
-    (void)pOutBeg;
     while ( p1Beg < p1End && p2Beg < p2End )
     {
         if ( *p1Beg == *p2Beg )
@@ -153,9 +151,7 @@ void Abc_MergeSort( int * pInput, int nSize )
 void Abc_SortMergeCost2( int * p1Beg, int * p1End, int * p2Beg, int * p2End, int * pOut, int * pCost )
 {
     int nEntries = (p1End - p1Beg) + (p2End - p2Beg);
-    (void)nEntries;
     int * pOutBeg = pOut;
-    (void)pOutBeg;
     while ( p1Beg < p1End && p2Beg < p2End )
     {
         if ( pCost[*p1Beg] == pCost[*p2Beg] )
@@ -257,9 +253,7 @@ void Abc_MergeSortCost2( int * pInput, int nSize, int * pCost )
 void Abc_SortMergeCost2Reverse( int * p1Beg, int * p1End, int * p2Beg, int * p2End, int * pOut, int * pCost )
 {
     int nEntries = (p1End - p1Beg) + (p2End - p2Beg);
-    (void)nEntries;
     int * pOutBeg = pOut;
-    (void)pOutBeg;
     while ( p1Beg < p1End && p2Beg < p2End )
     {
         if ( pCost[*p1Beg] == pCost[*p2Beg] )
@@ -362,9 +356,7 @@ void Abc_MergeSortCost2Reverse( int * pInput, int nSize, int * pCost )
 void Abc_MergeSortCostMerge( int * p1Beg, int * p1End, int * p2Beg, int * p2End, int * pOut )
 {
     int nEntries = (p1End - p1Beg) + (p2End - p2Beg);
-    (void)nEntries;
     int * pOutBeg = pOut;
-    (void)pOutBeg;
     while ( p1Beg < p1End && p2Beg < p2End )
     {
         if ( p1Beg[1] == p2Beg[1] )
@@ -1038,3 +1030,4 @@ word Abc_RandomW( int fReset )
 
 
 ABC_NAMESPACE_IMPL_END
+

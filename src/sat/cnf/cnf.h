@@ -134,6 +134,7 @@ extern Cnf_Dat_t *     Cnf_DeriveOtherWithMan( Cnf_Man_t * p, Aig_Man_t * pAig, 
 extern void            Cnf_ManPrepare();
 extern Cnf_Man_t *     Cnf_ManRead();
 extern void            Cnf_ManFree();
+
 /*=== cnfCut.c ========================================================*/
 extern Cnf_Cut_t *     Cnf_CutCreate( Cnf_Man_t * p, Aig_Obj_t * pObj );
 extern void            Cnf_CutPrint( Cnf_Cut_t * pCut );

@@ -19,7 +19,6 @@
 ***********************************************************************/
 
 #include "gia.h"
-#include <limits.h>
 #include "misc/extra/extra.h"
 #include "misc/vec/vecHsh.h"
 #include "misc/vec/vecWec.h"
@@ -120,11 +119,12 @@ void Eso_ManCoverPrint( Eso_Man_t * p, Vec_Int_t * vEsop )
         printf( "Const 0\n" );
         return;
     }
-    assert( p->nVars >= 0 && p->nVars <= INT_MAX - 4 );
-    if ( p->nVars < 0 || p->nVars > INT_MAX - 4 ) abort();
-    vStr = Vec_StrStart( p->nVars + 4 );
-    memset( Vec_StrArray(vStr), '-', p->nVars );
-    memcpy( Vec_StrArray(vStr) + p->nVars, " 1\n", 4 );
+    vStr = Vec_StrAlloc( p->nVars + 4 );
+    Vec_StrFill( vStr, p->nVars, '-' );
+    Vec_StrPush( vStr, ' ' );
+    Vec_StrPush( vStr, '1' );
+    Vec_StrPush( vStr, '\n' );
+    Vec_StrPush( vStr, '\0' );
     assert( Vec_IntSize(vEsop) > 0 );
     Vec_IntForEachEntry( vEsop, Cube, i )
     {
@@ -538,3 +538,4 @@ Gia_Man_t * Eso_ManCompute( Gia_Man_t * pGia, int fVerbose, Vec_Wec_t ** pvRes )
 
 
 ABC_NAMESPACE_IMPL_END
+

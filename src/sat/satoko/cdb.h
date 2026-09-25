@@ -38,7 +38,6 @@ static inline unsigned cdb_cref(struct cdb *p, unsigned *clause)
 static inline void cdb_grow(struct cdb *p, unsigned cap)
 {
     unsigned prev_cap = p->cap;
-    (void)prev_cap;
 
     if (p->cap >= cap)
         return;

@@ -245,6 +245,7 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
     char * pContents, * pDrivers = NULL, * pSymbols, * pCur, * pName, * pType;
     unsigned uLit0, uLit1, uLit;
     int RetValue;
+    unsigned int entry;
 
     // read the file into the buffer
     if ( !strncmp(pFileName+strlen(pFileName)-4,".bz2",4) )
@@ -253,12 +254,14 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
         pContents = Ioa_ReadLoadFileGzAig( pFileName, &nFileSize );
     else
     {
+        printf("--------> BEGIN AIG File reading using fread (...) <---------------- \n");
 //        pContents = Ioa_ReadLoadFile( pFileName );
         nFileSize = Extra_FileSize( pFileName );
         pFile = fopen( pFileName, "rb" );
         pContents = ABC_ALLOC( char, nFileSize );
         RetValue = fread( pContents, nFileSize, 1, pFile );
         fclose( pFile );
+        printf("--------> END AIG File reading using fread (...) <---------------- \n");
     }
 
 
@@ -269,7 +272,7 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
         ABC_FREE( pContents );
         return NULL;
     }
-
+    printf("Before: nTotal:%d nInputs:%d nLatches:%d nOutputs:%d nAnds:%d\n",nTotal,nInputs,nLatches,nOutputs,nAnds);
     // read the parameters (M I L O A + B C J F)
     pCur = pContents;         while ( *pCur != ' ' ) pCur++; pCur++;
     // read the number of objects
@@ -282,6 +285,7 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
     nOutputs = atoi( pCur );  while ( *pCur != ' ' ) pCur++; pCur++;
     // read the number of nodes
     nAnds = atoi( pCur );     while ( *pCur != ' ' && *pCur != '\n' ) pCur++; 
+    printf("After: nTotal:%d nInputs:%d nLatches:%d nOutputs:%d nAnds:%d\n",nTotal,nInputs,nLatches,nOutputs,nAnds);
     if ( *pCur == ' ' )
     {
 //        assert( nOutputs == 0 );
@@ -342,45 +346,54 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
     }
 
     // allocate the empty AIG
-    pNtkNew = Abc_NtkAlloc( ABC_NTK_STRASH, ABC_FUNC_AIG, 1 );
+    pNtkNew = Abc_NtkAlloc( ABC_NTK_STRASH, ABC_FUNC_AIG, 1 ); //Craete empty Abc Network Object
     pName = Extra_FileNameGeneric( pFileName );
-    pNtkNew->pName = Extra_UtilStrsav( pName );
+    pNtkNew->pName = Extra_UtilStrsav( pName ); //Set the Abc network name
     pNtkNew->pSpec = Extra_UtilStrsav( pFileName );
     ABC_FREE( pName );
     pNtkNew->nConstrs = nConstr;
 
+    printf("Space allocated for : Count: (#Inputs: %d  #nLatches: %d  #nAnd: %d) + 1  --> Total: %d\n",nInputs,nLatches,nAnds,(1+nInputs+nLatches+nAnds));
     // prepare the array of nodes
-    vNodes = Vec_PtrAlloc( 1 + nInputs + nLatches + nAnds );
+    vNodes = Vec_PtrAlloc( 1 + nInputs + nLatches + nAnds ); // Create the vNodes vector to hold the nodes of the AIG
     Vec_PtrPush( vNodes, Abc_ObjNot( Abc_AigConst1(pNtkNew) ) );
 
-    // create the PIs
+    // Step 1: create the PIs
+    printf("Step 1: create #PI %d and push into vNodes Vector\n",nInputs + 1);
     for ( i = 0; i < nInputs; i++ )
     {
-        pObj = Abc_NtkCreatePi(pNtkNew);    
-        Vec_PtrPush( vNodes, pObj );
+        pObj = Abc_NtkCreatePi(pNtkNew); // Create PI object
+        Vec_PtrPush( vNodes, pObj ); //Add PI object to vNodes vector
     }
-    // create the POs
+    // Step 2:  create the POs
+    printf("Step 2: create #PO %d objects and NOT PUSHED into vNodes Vector\n",nOutputs + 1);
     for ( i = 0; i < nOutputs; i++ )
     {
         pObj = Abc_NtkCreatePo(pNtkNew);   
     }
-    // create the latches
+    // Step 3: create the latches
+    printf("Step 3: create #latches %d and push into vNodes Vector\n",nLatches);
     nDigits = Abc_Base10Log( nLatches );
     for ( i = 0; i < nLatches; i++ )
     {
-        pObj = Abc_NtkCreateLatch(pNtkNew);
-        Abc_LatchSetInit0( pObj );
-        pNode0 = Abc_NtkCreateBi(pNtkNew);
-        pNode1 = Abc_NtkCreateBo(pNtkNew);
-        Abc_ObjAddFanin( pObj, pNode0 );
+        pObj = Abc_NtkCreateLatch(pNtkNew); //Create a latch object
+        Abc_LatchSetInit0( pObj ); //Init Latch to 0
+        pNode0 = Abc_NtkCreateBi(pNtkNew); //Creates a BOX input (bi)
+        pNode1 = Abc_NtkCreateBo(pNtkNew); //Creates a BOX output (bo)
+        Abc_ObjAddFanin( pObj, pNode0 ); 
         Abc_ObjAddFanin( pNode1, pObj );
         Vec_PtrPush( vNodes, pNode1 );
         // assign names to latch and its input
 //        Abc_ObjAssignName( pObj, Abc_ObjNameDummy("_L", i, nDigits), NULL );
 //        printf( "Creating latch %s with input %d and output %d.\n", Abc_ObjName(pObj), pNode0->Id, pNode1->Id );
-    } 
+    }//End of latch adding 
     
-
+    //How to Print content of the vNodes vector?
+    printf("Content of vNodes: Note the content ! Are they address ? \n");
+    Vec_IntForEachEntry(vNodes,entry,i)
+        printf("[SGR] Entry at %d: Address: %p \n", i, entry);
+    printf("End \n");
+    printf("[SGR]Using pNtk: %d \n",pNtkNew->nObjs);
     if ( pContents[3] == ' ' ) // standard AIGER
     {
         // remember the beginning of latch/PO literals
@@ -400,15 +413,24 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
     for ( i = 0; i < nAnds; i++ )
     {
         Extra_ProgressBarUpdate( pProgress, i, NULL );
-        uLit = ((i + 1 + nInputs + nLatches) << 1);
+        uLit = ((i + 1 + nInputs + nLatches) << 1); // What is this line ?
         uLit1 = uLit  - Io_ReadAigerDecode( &pCur );
         uLit0 = uLit1 - Io_ReadAigerDecode( &pCur );
+        /* ── SGR: print AND gate literals ───────────────── */
+        printf("[SGR] AND[%d]  uLit=%-4u (var=%-2u compl=%u)"
+           "  uLit0=%-4u (var=%-2u compl=%u)"
+           "  uLit1=%-4u (var=%-2u compl=%u)\n",
+           i,
+           uLit,  uLit  >> 1, uLit  & 1,
+           uLit0, uLit0 >> 1, uLit0 & 1,
+           uLit1, uLit1 >> 1, uLit1 & 1);
+    /* ── end SGR ──────────────────────────────────────── */
 //        assert( uLit1 > uLit0 );
         pNode0 = Abc_ObjNotCond( (Abc_Obj_t *)Vec_PtrEntry(vNodes, uLit0 >> 1), uLit0 & 1 );
         pNode1 = Abc_ObjNotCond( (Abc_Obj_t *)Vec_PtrEntry(vNodes, uLit1 >> 1), uLit1 & 1 );
         assert( Vec_PtrSize(vNodes) == i + 1 + nInputs + nLatches );
         Vec_PtrPush( vNodes, Abc_AigAnd((Abc_Aig_t *)pNtkNew->pManFunc, pNode0, pNode1) );
-    }
+    }//End of for loop i
     Extra_ProgressBarStop( pProgress );
 
     // remember the place where symbols begin
@@ -418,9 +440,14 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
     pCur = pDrivers;
     if ( pContents[3] == ' ' ) // standard AIGER
     {
+        printf("Standard AIGER\n");
         Abc_NtkForEachLatchInput( pNtkNew, pObj, i )
         {
             uLit0 = atoi( pCur );  while ( *pCur != ' ' && *pCur != '\n' ) pCur++; 
+            /* ── SGR ── */
+            printf("[SGR] LATCH[%d] driver  uLit0=%-4u  var=%-2u  compl=%u\n",
+                                i, uLit0, uLit0 >> 1, uLit0 & 1);
+             /* ── end SGR ── */
             if ( *pCur == ' ' ) // read initial value
             {
                 int Init;
@@ -454,16 +481,22 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
             uLit0 = atoi( pCur );  while ( *pCur++ != '\n' );
             pNode0 = Abc_ObjNotCond( (Abc_Obj_t *)Vec_PtrEntry(vNodes, uLit0 >> 1), (uLit0 & 1) );//^ (uLit0 < 2) );
             Abc_ObjAddFanin( pObj, pNode0 );
+            /* ── SGR ── */
+            printf("[SGR] PO[%d]    driver  uLit0=%-4u  var=%-2u  compl=%u\n",
+                                i, uLit0, uLit0 >> 1, uLit0 & 1);
+            /* ── end SGR ── */
         }
     }
     else
     {
+        printf("NON Standard AIGER\n");   
         // read the latch driver literals
         Abc_NtkForEachLatchInput( pNtkNew, pObj, i )
         {
             uLit0 = Vec_IntEntry( vLits, i );
             pNode0 = Abc_ObjNotCond( (Abc_Obj_t *)Vec_PtrEntry(vNodes, uLit0 >> 1), (uLit0 & 1) );
             Abc_ObjAddFanin( pObj, pNode0 );
+            
         }
         // read the PO driver literals
         Abc_NtkForEachPo( pNtkNew, pObj, i )
@@ -595,7 +628,7 @@ Abc_Ntk_t * Io_ReadAiger( char * pFileName, int fCheck )
         return NULL;
     }
     return pNtkNew;
-}
+}//End of Io_ReadAiger
 
 
 

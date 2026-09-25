@@ -8,5 +8,6 @@ SRC +=    src/base/wln/wln.c \
     src/base/wln/wlnObj.c \
     src/base/wln/wlnRead.c \
     src/base/wln/wlnRetime.c \
+    src/base/wln/wlnRtl.c \
     src/base/wln/wlnWlc.c \
     src/base/wln/wlnWriteVer.c 

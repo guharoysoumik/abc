@@ -525,7 +525,6 @@ int Gia_ManResubVerify( Gia_ResbMan_t * p, word * pFunc )
 int Gia_ManConstructFromMap( Gia_Man_t * pNew, Vec_Int_t * vGates, int nVars, Vec_Int_t * vUsed, Vec_Int_t * vCopy, int fHash )
 {
     int i, iLit0, iLit1, iLitRes, iTopLit = Vec_IntEntryLast( vGates );
-    (void)iTopLit;
     assert( Vec_IntSize(vUsed) == nVars );
     assert( Vec_IntSize(vGates) > 1 );
     assert( Vec_IntSize(vGates) % 2 == 1 );
@@ -553,7 +552,7 @@ int Gia_ManConstructFromMap( Gia_Man_t * pNew, Vec_Int_t * vGates, int nVars, Ve
             else
                 iLitRes = Gia_ManAppendXor( pNew, Abc_LitNotCond(iRes0, Abc_LitIsCompl(iLit0)), Abc_LitNotCond(iRes1, Abc_LitIsCompl(iLit1)) );
         }
-        else { assert( 0 ); abort(); }
+        else assert( 0 );
         Vec_IntPush( vCopy, iLitRes );
     }
     assert( Vec_IntSize(vCopy) == Vec_IntSize(vGates)/2 );
@@ -970,7 +969,6 @@ void Gia_ManFindUnatePairs( word * pSets[2], Vec_Ptr_t * vDivs, int nWords, Vec_
 void Gia_ManDeriveDivPair( int iDiv, Vec_Ptr_t * vDivs, int nWords, word * pRes )
 {
     int fComp = Abc_LitIsCompl(iDiv);
-    (void)fComp;
     int iDiv0 = Abc_Lit2Var(iDiv) & 0x7FFF;
     int iDiv1 = Abc_Lit2Var(iDiv) >> 15;
     word * pDiv0 = (word *)Vec_PtrEntry(vDivs, Abc_Lit2Var(iDiv0));
@@ -2158,3 +2156,4 @@ Gia_Man_t * Gia_ManResubUnateOne( char * pFileName, int nLimit, int nDivMax, int
 ////////////////////////////////////////////////////////////////////////
 
 ABC_NAMESPACE_IMPL_END
+

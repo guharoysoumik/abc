@@ -21,6 +21,7 @@
 #include "cnf.h"
 #include "base/main/main.h"
 
+
 ABC_NAMESPACE_IMPL_START
 
 
@@ -103,12 +104,22 @@ Vec_Int_t * Cnf_DeriveMappingArray( Aig_Man_t * pAig )
 
     // generate cuts for all nodes, assign cost, and find best cuts
 clk = Abc_Clock();
-    pMemCuts = Dar_ManComputeCuts( pAig, 10, 0, 0 );
+    printf("[src/sat/cnf/cnfCore.c/Cnf_DeriveMappingArray] BEGIN  Dar_ManComputeCuts(..)\n");
+    pMemCuts = Dar_ManComputeCuts( pAig, 10, 0, 0 ); 
+    printf("[src/sat/cnf/cnfCore.c/Cnf_DeriveMappingArray]  END   Dar_ManComputeCuts(..)\n");
+    //Generates 10 cuts for each node in the AIG and returns a memory manager for the cuts. The parameters are:
+    //pAig: The AIG manager for which cuts are being computed.
+    //10: The maximum number of cuts to be generated for each node.
+    //0: A flag indicating whether to skip the computation of truth tables for cuts that are too small (0 means do not skip).
+    //0: A flag indicating whether to print verbose output during the cut computation (0 means do not print verbose output).
+    //SGR_printMemCuts(pMemCuts, pAig, 10); 
+    
 p->timeCuts = Abc_Clock() - clk;
 
     // find the mapping
 clk = Abc_Clock();
-    Cnf_DeriveMapping( p );
+    Cnf_DeriveMapping( p ); /*Find the best mapping of the AIG nodes to CNF clauses based on the computed cuts. 
+    This function analyzes the cuts generated in the previous step and determines how to represent the AIG nodes in terms of CNF clauses, optimizing for factors such as clause size and variable usage.*/
 p->timeMap = Abc_Clock() - clk;
 //    Aig_ManScanMapping( p, 1 );
 
@@ -206,6 +217,8 @@ Cnf_Dat_t * Cnf_DeriveOtherWithMan( Cnf_Man_t * p, Aig_Man_t * pAig, int fSkipTt
     // generate cuts for all nodes, assign cost, and find best cuts
 clk = Abc_Clock();
     pMemCuts = Dar_ManComputeCuts( pAig, 10, fSkipTtMin, 0 );
+    //SGR_printMemCuts(pMemCuts, pAig, 10);
+    
 p->timeCuts = Abc_Clock() - clk;
 
     // find the mapping
@@ -236,6 +249,8 @@ Cnf_Dat_t * Cnf_DeriveOther( Aig_Man_t * pAig, int fSkipTtMin )
     Cnf_ManPrepare();
     return Cnf_DeriveOtherWithMan( s_pManCnf, pAig, fSkipTtMin );
 }
+
+
 
 #if 0
 

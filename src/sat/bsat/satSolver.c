@@ -1522,15 +1522,13 @@ int sat_solver_simplify(sat_solver* s)
 
 void sat_solver_reducedb(sat_solver* s)
 {
-    int fVerbose = s->fVerbose;
-    abctime clk;
+    abctime clk = Abc_Clock();
     Sat_Mem_t * pMem = &s->Mem;
     int nLearnedOld = veci_size(&s->act_clas);
     int * act_clas = veci_begin(&s->act_clas);
     int * pPerm, * pArray, * pSortValues, nCutoffValue;
     int i, k, j, Id, Counter, CounterStart, nSelected;
     clause * c;
-    ABC_TIME_START(fVerbose, clk);
 
     assert( s->nLearntMax > 0 );
     assert( nLearnedOld == Sat_MemEntryNum(pMem, 1) );
@@ -1630,8 +1628,8 @@ void sat_solver_reducedb(sat_solver* s)
     assert( Counter == (int)s->stats.learnts );
 
     // report the results
-    ABC_TIME_STOP(fVerbose, s->timeReduceDb, clk);
-    if ( fVerbose )
+    s->timeReduceDb += Abc_Clock() - clk;
+    if ( s->fVerbose )
     {
     Abc_Print(1, "reduceDB: Keeping %7d out of %7d clauses (%5.2f %%)  ",
         s->stats.learnts, nLearnedOld, 100.0 * s->stats.learnts / nLearnedOld );
@@ -2321,7 +2319,6 @@ int sat_solver_minimize_assumptions2( sat_solver* s, int * pLits, int nLits, int
             {
                 int LitNot = Abc_LitNot(pLits[i]);
                 int RetValue = sat_solver_addclause( s, &LitNot, &LitNot+1 );
-                (void)RetValue;
                 assert( RetValue );
             }
 
@@ -2352,7 +2349,6 @@ int sat_solver_minimize_assumptions2( sat_solver* s, int * pLits, int nLits, int
             {
                 int LitNot = Abc_LitNot(pLits[i]);
                 int RetValue = sat_solver_addclause( s, &LitNot, &LitNot+1 );
-                (void)RetValue;
                 assert( RetValue );
             }
 

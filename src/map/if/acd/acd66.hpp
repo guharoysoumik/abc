@@ -509,7 +509,7 @@ private:
     assert( num_vars <= 16 );
 
     /* init combinations */
-    uint32_t pComb[16], pInvPerm[16], shared_set[6];
+    uint32_t pComb[16], pInvPerm[16], shared_set[4];
     for ( uint32_t i = 0; i < num_vars; ++i )
     {
       pComb[i] = pInvPerm[i] = i;
@@ -775,8 +775,6 @@ private:
 
   inline int check_shared_set_multi( STT const& tt, uint32_t target_num_ss, uint32_t* res_shared )
   {
-    assert( best_free_set <= 6 );
-    if ( best_free_set > 6 ) return -1;
     /* init combinations */
     uint32_t pComb[6], pInvPerm[6];
 
@@ -798,9 +796,7 @@ private:
             res_shared[j] = pComb[j];
           }
           /* sort vars */
-          for ( uint32_t j = 1; j < i; ++j )
-            for ( uint32_t k = j; k > 0 && res_shared[k] < res_shared[k - 1]; --k )
-              std::swap( res_shared[k], res_shared[k - 1] );
+          std::sort( res_shared, res_shared + i );
           return i;
         }
       } while ( combinations_next_simple( i, pComb, pInvPerm, num_vars - best_free_set ) );

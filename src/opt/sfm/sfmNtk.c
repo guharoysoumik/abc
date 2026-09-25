@@ -294,7 +294,6 @@ void Sfm_NtkDeleteObj_rec( Sfm_Ntk_t * p, int iNode )
     Sfm_ObjForEachFanin( p, iNode, iFanin, i )
     {
         int RetValue = Vec_IntRemove( Sfm_ObjFoArray(p, iFanin), iNode );  assert( RetValue );
-        (void)RetValue;
         Sfm_NtkDeleteObj_rec( p, iFanin );
     }
     Vec_IntClear( Sfm_ObjFiArray(p, iNode) );
@@ -332,7 +331,6 @@ void Sfm_NtkUpdate( Sfm_Ntk_t * p, int iNode, int f, int iFaninNew, word uTruth,
         Sfm_ObjForEachFanin( p, iNode, iFanin, f )
         {
             int RetValue = Vec_IntRemove( Sfm_ObjFoArray(p, iFanin), iNode );  assert( RetValue );
-            (void)RetValue;
             Sfm_NtkDeleteObj_rec( p, iFanin );
         }
         Vec_IntClear( Sfm_ObjFiArray(p, iNode) );
@@ -392,3 +390,4 @@ int Sfm_NodeReadUsed( Sfm_Ntk_t * p, int i )
 
 
 ABC_NAMESPACE_IMPL_END
+

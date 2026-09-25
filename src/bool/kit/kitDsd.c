@@ -1773,13 +1773,10 @@ unsigned Kit_DsdGetSupports( Kit_DsdNtk_t * p )
         assert( p->nNodes == 1 );
         uSupport = p->pSupps[0] = 0;
     }
-    else if ( pRoot->Type == KIT_DSD_VAR )
+    if ( pRoot->Type == KIT_DSD_VAR )
     {
-        int iVar = Abc_Lit2Var(pRoot->pFans[0]);
         assert( p->nNodes == 1 );
-        assert( iVar >= 0 && iVar < p->nVars && iVar < 16 );
-        if ( iVar < 0 || iVar >= p->nVars || iVar >= 16 ) abort();
-        uSupport = p->pSupps[0] = 1u << iVar;
+        uSupport = p->pSupps[0] = Kit_DsdLitSupport( p, pRoot->pFans[0] );
     }
     else
         uSupport = Kit_DsdGetSupports_rec( p, p->Root );
@@ -3285,3 +3282,4 @@ char ** Kit_DsdNpn4ClassNames()
 
 
 ABC_NAMESPACE_IMPL_END
+

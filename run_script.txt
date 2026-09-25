@@ -1,0 +1,14 @@
+read ./designs/2/6d002.aig;
+print_stats;
+write_dot ./designs/2/6d002.dot;
+bmc3 -a -g -v -T 100;
+constr -N 1;
+fold;
+write ./designs/2/6d002_after_constr_without_invert_fold.aig;
+echo "================================================="
+read ./designs/2/6d002_after_constr_without_invert_fold.aig;
+print_stats;
+write_dot ./designs/2/6d002_after_constr_without_invert_fold.dot;
+bmc3 -a -g -v -T 100;
+print_stats;
+

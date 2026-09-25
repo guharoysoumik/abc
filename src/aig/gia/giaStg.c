@@ -411,13 +411,9 @@ void Gia_ManStgPrint( FILE * pFile, Vec_Int_t * vLines, int nIns, int nOuts, int
     for ( i = 0; i < Vec_IntSize(vLines); i += 4 )
     {
         int iMint = Vec_IntEntry(vLines, i  );
-        (void)iMint;
         int iCur  = Vec_IntEntry(vLines, i+1) - 1;
-        (void)iCur;
         int iNext = Vec_IntEntry(vLines, i+2) - 1;
-        (void)iNext;
         int iOut  = Vec_IntEntry(vLines, i+3);
-        (void)iOut;
         assert( iMint >= 0 && iMint < (1<<nIns)  );
         assert( iCur  >= 0 && iCur  < nStates    );
         assert( iNext >= 0 && iNext < nStates    );
@@ -529,3 +525,4 @@ Gia_Man_t * Gia_ManStgRead( char * pFileName, int kHot, int fVerbose )
 
 
 ABC_NAMESPACE_IMPL_END
+

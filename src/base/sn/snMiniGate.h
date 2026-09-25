@@ -26,25 +26,17 @@
 ABC_NAMESPACE_HEADER_START
 
 typedef uint32_t (*sn_gate_id_resolver_t)(void* context, const char* gate_name);
-typedef bool (*sn_gate_validate_t)(void* context, uint32_t gate_id, uint32_t fanin_count);
-typedef sn_obj_id_t (*sn_gate_construct_t)(void* context, sn_module_t* module, uint32_t gate_id,
-                                          const sn_obj_id_t* fanins);
 
 // Reconstructs ABC's mini-mapping array as one-bit SN_GATE objects. Mini-mapping numbers CIs first and mapped nodes
 // afterward in topological order. Gate names stored at the end of the array are resolved into the current library's
 // stable gate IDs; the name is also retained as the SN object name for structural Verilog emission.
-static inline sn_module_id_t sn_design_add_gate_module_impl(sn_design_t* design, sn_module_id_t source_top_id,
+static inline sn_module_id_t sn_design_add_gate_module(sn_design_t* design, sn_module_id_t source_top_id,
                                                         const int* mapping, size_t mapping_count,
                                                         const sn_blast_boundary_t* boundary,
                                                         sn_gate_id_resolver_t resolver, void* resolver_context,
-                                                        const char* module_name, sn_gate_validate_t validate,
-                                                        sn_gate_construct_t construct)
+                                                        const char* module_name)
 {
     assert(design && source_top_id < design->modules.size && mapping && boundary && resolver && module_name);
-    // The legacy resolver uses Mio IDs; a bound constructor must explicitly
-    // translate them into parser-order IDs. Never mix the two namespaces.
-    if ((design->library && (!validate || !construct)) || (!design->library && (validate || construct)))
-        return SN_INVALID_ID;
     if (mapping_count < 4 || mapping[0] < 0 || mapping[1] < 0 || mapping[2] < 0 || mapping[3] < 0)
         return SN_INVALID_ID;
     uint32_t ci_count = (uint32_t)mapping[0];
@@ -104,7 +96,7 @@ static inline sn_module_id_t sn_design_add_gate_module_impl(sn_design_t* design,
             break;
         }
         gate_ids[i] = resolver(resolver_context, gate_name);
-        if (gate_ids[i] == SN_INVALID_ID || (validate && !validate(resolver_context, gate_ids[i], fanin_counts[i])))
+        if (gate_ids[i] == SN_INVALID_ID)
         {
             valid = false;
             break;
@@ -172,8 +164,7 @@ static inline sn_module_id_t sn_design_add_gate_module_impl(sn_design_t* design,
             assert(fanin < ci_count + i && objects[fanin] != SN_INVALID_ID);
             fanins[k] = objects[fanin];
         }
-        objects[ci_count + i] = construct ? construct(resolver_context, result, gate_ids[i], fanins) :
-            sn_module_add_gate(result, count, fanins, gate_ids[i], gate_name);
+        objects[ci_count + i] = sn_module_add_gate(result, count, fanins, gate_ids[i], gate_name);
         free(fanins);
         gate_name += strlen(gate_name) + 1;
     }
@@ -188,7 +179,6 @@ static inline sn_module_id_t sn_design_add_gate_module_impl(sn_design_t* design,
         for (uint32_t bit = 0; bit < width; bit++)
         {
             sn_blast_boundary_bit_t endpoint = sn_vec_at(sn_blast_boundary_bit_t, &boundary->cos, co_index);
-            (void)endpoint;
             assert(endpoint.kind == SN_BLAST_BOUNDARY_TOP_PO && endpoint.port == i && endpoint.signal.bit == bit);
             assert(output_indices[co_index] < ci_count + node_count);
             bits[bit] = objects[output_indices[co_index++]];
@@ -218,30 +208,6 @@ static inline sn_module_id_t sn_design_add_gate_module_impl(sn_design_t* design,
         sn_design_reorder_module_topo(design, result_id);
     assert(sn_module_is_topo(sn_design_get_module_const(design, result_id)));
     return result_id;
-}
-
-static inline sn_module_id_t sn_design_add_gate_module(sn_design_t* design, sn_module_id_t source_top_id,
-                                                        const int* mapping, size_t mapping_count,
-                                                        const sn_blast_boundary_t* boundary,
-                                                        sn_gate_id_resolver_t resolver, void* resolver_context,
-                                                        const char* module_name)
-{
-    return sn_design_add_gate_module_impl(design, source_top_id, mapping, mapping_count, boundary,
-        resolver, resolver_context, module_name, NULL, NULL);
-}
-
-// Bound resolvers validate every referenced cell before this helper creates a
-// module. The constructor preserves pin order and handles synthetic constants.
-static inline sn_module_id_t sn_design_add_bound_gate_module(sn_design_t* design, sn_module_id_t source_top_id,
-                                                        const int* mapping, size_t mapping_count,
-                                                        const sn_blast_boundary_t* boundary,
-                                                        sn_gate_id_resolver_t resolver, void* resolver_context,
-                                                        const char* module_name, sn_gate_validate_t validate,
-                                                        sn_gate_construct_t construct)
-{
-    assert(design->library && validate && construct);
-    return sn_design_add_gate_module_impl(design, source_top_id, mapping, mapping_count, boundary,
-        resolver, resolver_context, module_name, validate, construct);
 }
 
 ABC_NAMESPACE_HEADER_END

@@ -120,7 +120,11 @@ Abc_Ntk_t * Io_ReadNetlist( char * pFileName, Io_FileType_t FileType, int fCheck
     if ( FileType == IO_FILE_AIGER || FileType == IO_FILE_BAF || FileType == IO_FILE_BBLIF )
     {
         if ( FileType == IO_FILE_AIGER )
+        {   
+            printf("[src/base/io/ioUtil.c/ Io_ReadNetlist(...)] BEGIN FileType is IO_FILE_AIGER\n");
             pNtk = Io_ReadAiger( pFileName, fCheck );
+            printf("[src/base/io/ioUtil.c/ Io_ReadNetlist(...)] END FileType is IO_FILE_AIGER\n");
+        }
         else if ( FileType == IO_FILE_BAF )
             pNtk = Io_ReadBaf( pFileName, fCheck );
         else // if ( FileType == IO_FILE_BBLIF )
@@ -903,7 +907,6 @@ void Io_TransformSF2PLA( char * pNameIn, char * pNameOut )
         if ( strstr(pBuffer, "SDF") )
         {
             char * pRes = fgets(pBuffer, Size, pFileIn);
-            (void)pRes;
             assert( pRes != NULL );
             if ( (pToken = strtok( pBuffer, " \t\r\n" )) )
                 fprintf( pFileOut, ".i %d\n", atoi(pToken) );
@@ -1090,3 +1093,4 @@ Vec_Ptr_t * Io_FileReadCnf( char * pFileName, int fMulti )
 
 
 ABC_NAMESPACE_IMPL_END
+

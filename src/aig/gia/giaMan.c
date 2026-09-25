@@ -1413,10 +1413,7 @@ char * Gia_ObjGetDumpName( Vec_Ptr_t * vNames, char c, int i, int d )
             sprintf( pBuffer, "\\%s ", pName );
     }
     else
-    {
-        int Length = snprintf( pBuffer, sizeof(pBuffer), "%c%0*d%c", c, d, i, c );
-        if ( Length < 0 || (size_t)Length >= sizeof(pBuffer) ) abort();
-    }
+        sprintf( pBuffer, "%c%0*d%c", c, d, i, c );
     return pBuffer;
 }
 void Gia_ManWriteNames( FILE * pFile, char c, int n, Vec_Ptr_t * vNames, int Start, int Skip, Vec_Bit_t * vObjs, int fReverse )
@@ -2517,7 +2514,6 @@ Gia_Man_t * Gia_ManDupFromArray( int * pObjs, int nObjs, int nIns, int nLatches,
         int uLit0 = pObjs[uLit+0];
         int uLit1 = pObjs[uLit+1];
         int uLit2 = Gia_ManAppendAnd( pNew, uLit0, uLit1 );
-        (void)uLit2;
         assert( uLit2 == uLit );
     }
     for ( i = 0; i < nOuts + nLatches; i++ )

@@ -469,8 +469,6 @@ Gia_MmStep_t * Gia_MmStepStart( int nSteps )
 {
     Gia_MmStep_t * p;
     int i, k;
-    assert( nSteps > 0 && nSteps <= 28 );
-    if ( nSteps <= 0 || nSteps > 28 ) abort();
     p = ABC_ALLOC( Gia_MmStep_t, 1 );
     memset( p, 0, sizeof(Gia_MmStep_t) );
     p->nMems = nSteps;
@@ -597,3 +595,4 @@ int Gia_MmStepReadMemUsage( Gia_MmStep_t * p )
 ///                       END OF FILE                                ///
 ////////////////////////////////////////////////////////////////////////
 ABC_NAMESPACE_IMPL_END
+

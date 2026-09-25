@@ -934,14 +934,12 @@ int Dar_LibEval_rec( Dar_Lib_t * pLib, Dar_LibObj_t * pObj, int Out, int nNodesS
 ***********************************************************************/
 void Dar_LibEval( Dar_Man_t * p, Aig_Obj_t * pRoot, Dar_Cut_t * pCut, int Required, int * pnMffcSize )
 {
-    int fVerbose = p->pPars->fVerbose;
     Dar_Lib_t * pLib = s_DarLib;
     int fTraining = 0;
     float PowerSaved, PowerAdded;
     Dar_LibObj_t * pObj;
     int Out, k, Class, nNodesSaved, nNodesAdded, nNodesGained;
-    abctime clk;
-    ABC_TIME_START(fVerbose, clk);
+    abctime clk = Abc_Clock();
     if ( pCut->nLeaves != 4 )
         return;
     // check if the cut exits and assigns leaves and their levels
@@ -983,12 +981,9 @@ void Dar_LibEval( Dar_Man_t * p, Aig_Obj_t * pRoot, Dar_Cut_t * pCut, int Requir
         assert( p->LevelBest <= Required );
         *pnMffcSize   = nNodesSaved;
     }
-    if ( fVerbose )
-    {
-        clk = Abc_Clock() - clk;
-        p->timeEval += clk;
-        p->ClassTimes[Class] += clk;
-    }
+clk = Abc_Clock() - clk;
+p->ClassTimes[Class] += clk;
+p->timeEval += clk;
 }
 
 /**Function*************************************************************

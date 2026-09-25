@@ -45,8 +45,7 @@ ABC_NAMESPACE_IMPL_START
 char * Llb_ManGetDummyName( char * pPrefix, int Num, int nDigits )
 {
     static ABC_THREAD_LOCAL char Buffer[2000];
-    int Length = snprintf( Buffer, sizeof(Buffer), "%s%0*d", pPrefix, nDigits, Num );
-    if ( Length < 0 || (size_t)Length >= sizeof(Buffer) ) abort();
+    sprintf( Buffer, "%s%0*d", pPrefix, nDigits, Num );
     return Buffer;
 }
 

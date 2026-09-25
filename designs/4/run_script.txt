@@ -1,0 +1,10 @@
+read ./6d004.v;
+strash;
+print_stats;
+write_aiger ./6d004.aig;
+read  6d004.aig;
+write_dot  6d004.dot;
+print_stats;
+echo ">>>>>>>>>>>>>>>>>>>>>BMC3 with out any constraints<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"
+bmc3 -a -g -v -T 100;
+echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(())<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"

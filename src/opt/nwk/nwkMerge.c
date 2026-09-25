@@ -363,7 +363,6 @@ void Nwk_ManGraphPrepare( Nwk_Grf_t * p )
 void Nwk_ManGraphSortPairs( Nwk_Grf_t * p )
 {
     int nSize = Vec_IntSize(p->vPairs);
-    (void)nSize;
     int * pIdToPair, i;
     // allocate storage
     pIdToPair = ABC_ALLOC( int, p->nObjs+1 );
@@ -1044,3 +1043,4 @@ Vec_Int_t * Nwk_ManLutMerge( Nwk_Man_t * pNtk, void * pParsInit )
 
 
 ABC_NAMESPACE_IMPL_END
+

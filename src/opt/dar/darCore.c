@@ -79,7 +79,6 @@ void Dar_ManDefaultRwrParams( Dar_RwrPar_t * pPars )
 int Dar_ManRewrite( Aig_Man_t * pAig, Dar_RwrPar_t * pPars )
 {
     extern Vec_Int_t * Saig_ManComputeSwitchProbs( Aig_Man_t * p, int nFrames, int nPref, int fProbOne );
-    int fVerbose = pPars->fVerbose;
     Dar_Man_t * p;
 //    Bar_Progress_t * pProgress;
     Dar_Cut_t * pCut;
@@ -139,10 +138,10 @@ int Dar_ManRewrite( Aig_Man_t * pAig, Dar_RwrPar_t * pPars )
 
         // compute cuts for the node
         p->nNodesTried++;
-        ABC_TIME_START(fVerbose, clk);
+clk = Abc_Clock();
         Dar_ObjSetCuts( pObj, NULL );
         Dar_ObjComputeCuts_rec( p, pObj );
-        ABC_TIME_STOP(fVerbose, p->timeCuts, clk);
+p->timeCuts += Abc_Clock() - clk;
 
         // check if there is a trivial cut
         Dar_ObjForEachCut( pObj, pCut, k )
@@ -294,7 +293,7 @@ Aig_MmFixed_t * Dar_ManComputeCuts( Aig_Man_t * pAig, int nCutsMax, int fSkipTtM
     Dar_Man_t * p;
     Dar_RwrPar_t Pars, * pPars = &Pars; 
     Aig_Obj_t * pObj;
-    Aig_MmFixed_t * pMemCuts;
+    Aig_MmFixed_t * pMemCuts; //This pt will hold the memory manager for the cuts generated during the computation. It is used to manage memory allocation and deallocation for the cuts.
     int i, nNodes;
     abctime clk = Abc_Clock();
     // remove dangling nodes
@@ -315,8 +314,14 @@ Aig_MmFixed_t * Dar_ManComputeCuts( Aig_Man_t * pAig, int nCutsMax, int fSkipTtM
         Dar_ObjPrepareCuts( p, pObj );
     // compute cuts for each nodes in the topological order
     Aig_ManForEachNode( pAig, pObj, i )
+    {
+        printf("[src/opt/dar/darCore.c] Computing cuts for node ID:%d\n", pObj->Id);
         Dar_ObjComputeCuts( p, pObj, fSkipTtMin );
+    }
+        
     // print verbose stats
+    fVerbose=1; //SGR
+    printf("Force : fVerbose: %d\n", fVerbose);
     if ( fVerbose )
     {
 //        Aig_Obj_t * pObj;
@@ -339,8 +344,10 @@ Aig_MmFixed_t * Dar_ManComputeCuts( Aig_Man_t * pAig, int nCutsMax, int fSkipTtM
 //    Dar_ManCutsFree( p );
     // stop the rewriting manager
     Dar_ManStop( p );
+    
     return pMemCuts;
 }
+
 
 
 

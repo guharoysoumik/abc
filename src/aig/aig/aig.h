@@ -153,7 +153,7 @@ struct Aig_Man_t_
     Vec_Int_t *      vFlopReprs;      
     Abc_Cex_t *      pSeqModel;
     Vec_Ptr_t *      vSeqModelVec;   // vector of counter-examples (for sequential miters)
-    Aig_Man_t *      pManExdc;
+    Aig_Man_t *      pManExdc;      //Self referencial structure SGR
     Vec_Ptr_t *      vOnehots;
     int              fCreatePios;
     Vec_Int_t *      vEquPairs;   
@@ -178,7 +178,7 @@ typedef struct Aig_Cut_t_            Aig_Cut_t;
 // the cut used to represent node in the AIG
 struct Aig_Cut_t_
 {
-    Aig_Cut_t *     pNext;           // the next cut in the table 
+    Aig_Cut_t *     pNext;           // the next cut in the table //Self referencial structure SGR
     int             Cost;            // the cost of the cut
     unsigned        uSign;           // cut signature
     int             iNode;           // the node, for which it is the cut
@@ -428,10 +428,6 @@ static inline int     Aig_ObjFanoutNext( Aig_Man_t * p, int iFan )   { assert(iF
     for ( assert(p->pFanData), i = 0; (i < (int)(pObj)->nRefs) &&               \
           (((iFan) = i? Aig_ObjFanoutNext(p, iFan) : Aig_ObjFanout0Int(p, pObj->Id)), 1) && \
           (((pFanout) = Aig_ManObj(p, iFan>>1)), 1); i++ )
-#define Aig_ObjForEachFanoutId( p, pObj, FanId, iFan, i )                       \
-    for ( assert(p->pFanData), i = 0; (i < (int)(pObj)->nRefs) &&               \
-          (((iFan) = i? Aig_ObjFanoutNext(p, iFan) : Aig_ObjFanout0Int(p, pObj->Id)), 1) && \
-          (((FanId) = (iFan >> 1)), 1); i++ )
 
 
 ////////////////////////////////////////////////////////////////////////

@@ -220,6 +220,7 @@ int IoCommandRead( Abc_Frame_t * pAbc, int argc, char ** argv )
     fBarBufs = 0;
     fReadGia = 0;
     glo_fMapped = 0;
+    printf("[src/base/io/io.c] IoCommandRead(...): BEGIN  Input -> argc: %d, argv: %s\n", argc, argv[1]);
     Extra_UtilGetoptReset();
     while ( ( c = Extra_UtilGetopt( argc, argv, "mcbgh" ) ) != EOF )
     {
@@ -310,7 +311,9 @@ int IoCommandRead( Abc_Frame_t * pAbc, int argc, char ** argv )
         }
         return 0;
     }
+    printf("[src/base/io.c/IoCommandRead(...)] Io_Read(...) BEGIN\n");
     pNtk = Io_Read( pFileName, Io_ReadFileType(pFileName), fCheck, fBarBufs );
+    printf("[src/base/io.c/IoCommandRead(...)] Io_Read(...) END\n");
     if ( pNtk == NULL )
         return 0;
     if ( Abc_NtkPiNum(pNtk) == 0 )
@@ -322,6 +325,7 @@ int IoCommandRead( Abc_Frame_t * pAbc, int argc, char ** argv )
     Abc_FrameReplaceCurrentNetwork( pAbc, pNtk );
     Abc_FrameCopyLTLDataBase( pAbc, pNtk );
     Abc_FrameClearVerifStatus( pAbc );
+    printf("[src/base/io/io.c] IoCommandRead(...): END  \n");
     return 0;
 
 usage:

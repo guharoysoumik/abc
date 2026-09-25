@@ -62,12 +62,14 @@ SimpSolver * glucose_solver_start()
 {
     SimpSolver * S = new SimpSolver;
     S->setIncrementalMode();
+    printf("[src/sat/glucose/AbcGlucose.cpp] Glucose 3.0 is started.\n");
     return S;
 }
 
 void glucose_solver_stop(Gluco::SimpSolver* S)
 {
     delete S;
+    printf("[src/sat/glucose/AbcGlucose.cpp] Glucose 3.0 is stopped.\n");
 }
 
 void glucose_solver_reset(Gluco::SimpSolver* S)
@@ -78,6 +80,8 @@ void glucose_solver_reset(Gluco::SimpSolver* S)
 int glucose_solver_addclause(Gluco::SimpSolver* S, int * plits, int nlits)
 {
     vec<Lit> lits;
+    int sgr_print_message=0;
+    sgr_print_message?printf("[src/sat/glucose/AbcGlucose.cpp/glucose_solver_addclause(..)] Adding clause with %d literals: \n", nlits):printf("");
     for ( int i = 0; i < nlits; i++,plits++)
     {
         // note: Glucose uses the same var->lit conventiaon as ABC
@@ -100,6 +104,7 @@ void glucose_solver_setcallback(Gluco::SimpSolver* S, void * pman, int(*pfunc)(v
 int glucose_solver_solve(Gluco::SimpSolver* S, int * plits, int nlits)
 {
     vec<Lit> lits;
+    printf("[src/sat/glucose/AbcGlucose.cpp/glucose_solver_solve(..)] Solving with %d literals: \n", nlits);
     for (int i=0;i<nlits;i++,plits++)
     {
         Lit p;
@@ -145,6 +150,7 @@ void glucose_solver_setstop(Gluco::SimpSolver* S, int * pstop)
 ***********************************************************************/
 bmcg_sat_solver * bmcg_sat_solver_start() 
 {
+    printf("[/src/sat/glucose/AbcGlucose.cpp] Starting Glucose 3.0 SAT solver.bmcg_sat_solver_start() START \n");
     return (bmcg_sat_solver *)glucose_solver_start();
 }
 void bmcg_sat_solver_stop(bmcg_sat_solver* s)
@@ -1231,7 +1237,6 @@ void Gia_ManQuantLoadCnf( Gia_Man_t * p, Vec_Int_t * vObjsUsed, bmcg_sat_solver 
         {
             int Lit = Abc_Var2Lit( Gia_ObjCopyArray(p, 0), 1 );
             int RetValue = bmcg_sat_solver_addclause( pSats[0], &Lit, 1 );
-            (void)RetValue;
             assert( RetValue );
             if ( pSats[1] )
             bmcg_sat_solver_addclause( pSats[1], &Lit, 1 );

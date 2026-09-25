@@ -2564,9 +2564,8 @@ void Extra_NtkPowerTest()
         word t = (word)i;
         for ( k = 1; k < j; k++ )
             t *= (word)i;
-        word wi = (word)i, wj = (word)j;
-        Extra_NtkPrintBin( &wi, n );
-        Extra_NtkPrintBin( &wj, n );
+        Extra_NtkPrintBin( (word *)&i, n );
+        Extra_NtkPrintBin( (word *)&j, n );
         printf( " " );
         Extra_NtkPrintBin( (word *)&t, 64 );
         printf( "\n" );

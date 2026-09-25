@@ -1,0 +1,4 @@
+read ./designs/2/6d002.aig;
+print_stats;
+write_dot ./designs/2/6d002.dot;
+bmc3 -a -g -v -T 100;

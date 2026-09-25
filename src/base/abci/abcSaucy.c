@@ -2520,7 +2520,7 @@ saucy_free(struct saucy *s)
     ABC_FREE(s->gamma);
     ABC_FREE(s->start);
     ABC_FREE(s->prevnon);
-    free(s->nextnon ? s->nextnon-1 : NULL);
+    free(s->nextnon-1);
     ABC_FREE(s->clist);
     ABC_FREE(s->ccount);
     ABC_FREE(s->count);
@@ -2592,8 +2592,7 @@ saucy_alloc(Abc_Ntk_t * pNtk)
     s->count = ints(n+1);
     s->ccount = zeros(n);
     s->clist = ints(n);
-    s->nextnon = ints(n+1);
-    if ( s->nextnon ) s->nextnon++;
+    s->nextnon = ints(n+1) + 1;
     s->prevnon = ints(n+1);
     s->anctar = ints(n);
     s->start = ints(n);
@@ -2652,7 +2651,7 @@ saucy_alloc(Abc_Ntk_t * pNtk)
         && s->right.cfront && s->right.clen
         && s->stuff && s->bucket && s->count && s->ccount
         //&& s->clist && s->nextnon-1 && s->prevnon
-        && s->clist && s->nextnon && s->prevnon
+        && s->clist && s->nextnon[-1] && s->prevnon
         && s->start && s->gamma && s->theta && s->left.unlab
         && s->right.lab && s->right.unlab
         && s->left.lab &&  s->splitvar && s->splitwho && s->junk
@@ -3344,3 +3343,4 @@ void saucyGateWay( Abc_Ntk_t * pNtkOrig, Abc_Obj_t * pNodePo, FILE * gFile, int 
     ABC_PRT( "Runtime", clock() - clk );
 
 }ABC_NAMESPACE_IMPL_END
+

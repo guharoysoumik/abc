@@ -782,7 +782,6 @@ Dar_Cut_t * Dar_ObjComputeCuts( Dar_Man_t * p, Aig_Obj_t * pObj, int fSkipTtMin 
         if ( !fSkipTtMin && Dar_CutSuppMinimize( pCut ) )
         {
             int RetValue = Dar_CutFilter( pObj, pCut );
-            (void)RetValue;
             assert( !RetValue );
         }
 
@@ -835,3 +834,4 @@ Dar_Cut_t * Dar_ObjComputeCuts_rec( Dar_Man_t * p, Aig_Obj_t * pObj )
 
 
 ABC_NAMESPACE_IMPL_END
+
